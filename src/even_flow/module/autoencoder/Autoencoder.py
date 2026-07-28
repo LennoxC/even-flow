@@ -63,7 +63,7 @@ class ConvolutionalAutoencoder(AutoencoderBase):
                                               activation=activation,
                                               downsample_method=layer_config.downsample_method))
 
-            norm = self._norm(layer_config)
+            norm = self._norm(layer_config.out_channels, layer_config.dim)
             if norm is not None:
                 layers.append(norm)
         
@@ -79,25 +79,23 @@ class ConvolutionalAutoencoder(AutoencoderBase):
             upsample_method = layer_config.upsample_method if isinstance(layer_config, UpsampleLayerConfig) else "nearest"
 
             layers.append(ConvUpsampleLayer(dim=layer_config.dim,
-                                            in_channels=layer_config.out_channels,
-                                            out_channels=layer_config.in_channels,
+                                            in_channels=layer_config.in_channels,
+                                            out_channels=layer_config.out_channels,
                                             kernel_size=layer_config.kernel_size,
                                             activation=activation,
                                             upsample_method=upsample_method))
             
-            norm = self._norm(layer_config)
+            norm = self._norm(layer_config.out_channels, layer_config.dim)
             if norm is not None:
                 layers.append(norm)
         
         return torch.nn.Sequential(*layers)
 
-    def _norm(self, layer_config):
-        if self.config.layer_norm:
-            
-            return torch.nn.LayerNorm([layer_config.out_channels, ])
-        elif self.config.batch_norm:
-            return getattr(torch.nn, f"BatchNorm{layer_config.dim}d")(layer_config.out_channels)
-        else:
-            return None
-
-    
+    def _norm(self, channels, dim):
+        if self.config.group_norm:
+            return torch.nn.GroupNorm(1, channels)
+        
+        if self.config.batch_norm:
+            return getattr(torch.nn, f"BatchNorm{dim}d")(channels)
+        
+        return None

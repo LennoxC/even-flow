@@ -12,7 +12,7 @@ class ConvolutionalAutoencoderConfig(AutoencoderConfig):
     encoder_layers: list[DownsampleLayerConfig] # list of layer configurations
     decoder_layers: list[UpsampleLayerConfig] = None # list of layer configurations. If None, decoder will be the reverse of the encoder with nearest upsampling
 
-    layer_norm: bool = False # whether to use layer normalization
+    group_norm: bool = False # whether to use group normalization
     batch_norm: bool = False # whether to use batch normalization
 
 @dataclass

@@ -17,7 +17,7 @@ CONFIGS = [
             UpsampleLayerConfig(dim=2, in_channels=16, out_channels=3, kernel_size=3, activation="Sigmoid", upsample_method="nearest"),
         ],
         activation="GELU",
-        layer_norm=False,
+        group_norm=False,
         batch_norm=False),
     
     ConvolutionalAutoencoderConfig(
@@ -33,7 +33,7 @@ CONFIGS = [
             UpsampleLayerConfig(dim=2, in_channels=16, out_channels=3, kernel_size=3, activation="Sigmoid", upsample_method="nearest"),
         ],
         activation="GELU",
-        layer_norm=True,
+        group_norm=True,
         batch_norm=False),
     
     ConvolutionalAutoencoderConfig(
@@ -49,7 +49,7 @@ CONFIGS = [
             UpsampleLayerConfig(dim=2, in_channels=16, out_channels=3, kernel_size=3, activation="Sigmoid", upsample_method="nearest"),
         ],
         activation="GELU",
-        layer_norm=False,
+        group_norm=False,
         batch_norm=True)
 ]
 
