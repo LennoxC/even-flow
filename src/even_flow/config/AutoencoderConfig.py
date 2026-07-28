@@ -3,12 +3,14 @@ from dataclass import dataclass
 @dataclass
 class AutoencoderConfig:
     input_dim: tuple[int, int, int] # input dims [channels, height, width]
-    latent_dim: tuple[int, int] # latent space dimension [channels, width]
-
-    encoder_layers: list[DownsampleLayerConfig] # list of layer configurations
-    decoder_layers: list[UpsampleLayerConfig] = None # list of layer configurations. If None, decoder will be the reverse of the encoder with nearest upsampling
+    output_dim: tuple[int, int, int] = None # output dims [channels, height, width]. If None, output dims will be the same as input dims
 
     activation: str = "GeLU" # activation function
+
+@dataclass
+class ConvolutionalAutoencoderConfig(AutoencoderConfig):
+    encoder_layers: list[DownsampleLayerConfig] # list of layer configurations
+    decoder_layers: list[UpsampleLayerConfig] = None # list of layer configurations. If None, decoder will be the reverse of the encoder with nearest upsampling
 
     layer_norm: bool = False # whether to use layer normalization
     batch_norm: bool = False # whether to use batch normalization
@@ -19,7 +21,7 @@ class LayerConfig:
     in_channels: int # number of input channels
     out_channels: int # number of output channels
     kernel_size: int # size of the convolution kernel
-    activation: str = "GeLU" # activation function
+    activation: str = "GeLU" # activation function. Overrides the default activation function in the AutoencoderConfig if specified
 
 @dataclass
 class DownsampleLayerConfig(LayerConfig):

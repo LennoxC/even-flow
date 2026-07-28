@@ -1,3 +1,11 @@
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+
+# standard python gitignore
+__pycache__/
+*.py[cod]
+
+# VSCode
+.vscode/*
+!.vscode/tasks.json

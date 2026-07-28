@@ -61,7 +61,7 @@ class ConvUpsampleLayer(ConvBase):
 class ConvDownsampleLayer(ConvBase):
     """
     A basic convolutional layer (1d, 2d, 3d) with an activation function and downsampling.
-    Include downsampling using a specified method (e.g., max pooling, average pooling) or strided convolution.
+    Include downsampling using a specified method (e.g., max pooling, average pooling).
     """
     def __init__(self, 
                     downsample_method: str = "max"):

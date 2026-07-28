@@ -1,9 +1,10 @@
 import torch
-from even_flow.config.AutoencoderConfig import AutoencoderConfig
+from abc import ABC, abstractmethod
+from even_flow.config.AutoencoderConfig import AutoencoderConfig, ConvolutionalAutoencoderConfig
 
-class Autoencoder(torch.nn.Module):
+class AutoencoderBase(torch.nn.Module):
     """
-    A basic Autoencoder implementation.
+    A base Autoencoder implementation.
     - Use AutoencoderConfig to configure the model.
     - ConvLayer is used for the encoder and decoder.
     - The encoder outputs the mean and log variance of the latent space.
@@ -13,12 +14,81 @@ class Autoencoder(torch.nn.Module):
         super().__init__()
         self.config = config
 
-        self.encoder = torch.nn.Sequential()
+        self.encoder = self.build_encoder()
 
-        self.decoder = torch.nn.Sequential()
+        self.decoder = self.build_decoder()
+
+    @abstractmethod
+    def build_encoder(self):
+        pass
+
+    @abstractmethod
+    def build_decoder(self):
+        pass
 
     def encode(self, x):
         return self.encoder(x)
 
     def decode(self, z):
         return self.decoder(z)
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon
+
+    
+class ConvolutionalAutoencoder(AutoencoderBase):
+    """
+    A basic Convolutional Autoencoder implementation.
+    - Use ConvolutionalAutoencoderConfig to configure the model.
+    - UNets are constructed for the encoder and decoder.
+    """
+
+    def __init__(self, config: ConvolutionalAutoencoderConfig):
+        super().__init__(config)
+
+    def build_encoder(self):
+        layers = []
+        for layer_config in self.config.encoder_layers:
+
+            activation = layer_config.activation if layer_config.activation is not None else self.config.activation
+
+            layers.append(ConvDownsampleLayer(dim=layer_config.dim,
+                                              in_channels=layer_config.in_channels,
+                                              out_channels=layer_config.out_channels,
+                                              kernel_size=layer_config.kernel_size,
+                                              activation=layer_config.activation,
+                                              downsample_method=layer_config.downsample_method))
+        
+        return torch.nn.Sequential(*layers)
+
+    def build_decoder(self):
+        layers = []
+        if self.config.decoder_layers is not None:
+            for layer_config in self.config.decoder_layers:
+
+                activation = layer_config.activation if layer_config.activation is not None else self.config.activation
+
+                layers.append(ConvUpsampleLayer(dim=layer_config.dim,
+                                                in_channels=layer_config.in_channels,
+                                                out_channels=layer_config.out_channels,
+                                                kernel_size=layer_config.kernel_size,
+                                                activation=layer_config.activation,
+                                                upsample_method=layer_config.upsample_method))
+        else:
+            # If decoder_layers is None, create a reverse of the encoder with nearest upsampling
+            for layer_config in reversed(self.config.encoder_layers):
+                
+                activation = layer_config.activation if layer_config.activation is not None else self.config.activation
+                
+                layers.append(ConvUpsampleLayer(dim=layer_config.dim,
+                                                in_channels=layer_config.out_channels,
+                                                out_channels=layer_config.in_channels,
+                                                kernel_size=layer_config.kernel_size,
+                                                activation=layer_config.activation,
+                                                upsample_method="nearest"))
+        
+        return torch.nn.Sequential(*layers)
+
+    
