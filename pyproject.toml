@@ -1,8 +1,8 @@
 [project]
-authors = [{name = "lennoxc", email = "lennoxcrowe16@gmail.com"}]
+authors = [{ name = "lennoxc", email = "lennox.crowe@earthsciences.nz" }]
 dependencies = []
 name = "even-flow"
-requires-python = ">= 3.11"
+requires-python = ">=3.11"
 version = "0.1.0"
 
 [build-system]
@@ -11,23 +11,35 @@ requires = ["hatchling"]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64", "osx-arm64"]
-
-[tool.pixi.feature.gpu.system-requirements]
-cuda = "12.8"
-
-[tool.pixi.environments]
-gpu = ["gpu"]
-default = ["cpu"]
+platforms = [
+    "linux-64", 
+    "osx-arm64",
+    { name = "linux-64-cuda", platform = "linux-64", cuda = "12.8"}]
 
 [tool.pixi.pypi-dependencies]
 even_flow = { path = ".", editable = true }
 
 [tool.pixi.tasks]
 
+[tool.pixi.environments]
+default = ["cpu"]
+test = ["cpu", "test"]
+gpu = ["gpu"]
+
 [tool.pixi.feature.cpu.dependencies]
 pytorch-cpu = ">=2.9.1,<3"
+
+[tool.pixi.feature.test.dependencies]
+pytest = "*"
+pytest-cov = "*"
+
+[tool.pixi.feature.gpu]
+platforms = ["linux-64-cuda"]
 
 [tool.pixi.feature.gpu.dependencies]
 cuda-version = "12.8.*"
 pytorch-gpu = "*"
+
+[tool.pixi.dependencies]
+dataclasses = ">=0.8,<0.9"
+pyyaml = ">=6.0.3,<7"
