@@ -42,3 +42,4 @@ pytorch-gpu = "*"
 
 [tool.pixi.dependencies]
 dataclasses = ">=0.8,<0.9"
+pyyaml = ">=6.0.3,<7"

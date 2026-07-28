@@ -16,7 +16,11 @@ class ConvBase(torch.nn.Module):
         self.kernel_size = kernel_size
         self.activation = activation
 
-        self.conv = getattr(torch.nn, f"Conv{dim}d")(in_channels, out_channels, kernel_size, **kwargs)
+        # Set padding to maintain the same spatial dimensions after convolution by default. This can be overridden by specifying a different padding in kwargs.
+        if not hasattr(self, 'padding'):
+            self.padding = kernel_size // 2
+
+        self.conv = getattr(torch.nn, f"Conv{dim}d")(in_channels, out_channels, kernel_size, padding=self.padding, **kwargs)
         self.activation = getattr(torch.nn, activation)()
 
     def forward(self, x):
