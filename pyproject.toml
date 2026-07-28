@@ -1,5 +1,5 @@
 [project]
-authors = [{ name = "lennoxc", email = "lennoxcrowe16@gmail.com" }]
+authors = [{ name = "lennoxc", email = "lennox.crowe@earthsciences.nz" }]
 dependencies = []
 name = "even-flow"
 requires-python = ">=3.11"
@@ -11,7 +11,10 @@ requires = ["hatchling"]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64", "osx-arm64"]
+platforms = [
+    "linux-64", 
+    "osx-arm64",
+    { name = "linux-64-cuda", platform = "linux-64", cuda = "12.8"}]
 
 [tool.pixi.pypi-dependencies]
 even_flow = { path = ".", editable = true }
@@ -31,10 +34,7 @@ pytest = "*"
 pytest-cov = "*"
 
 [tool.pixi.feature.gpu]
-platforms = ["linux-64"]
-
-[tool.pixi.feature.gpu.system-requirements]
-cuda = "12.8"
+platforms = ["linux-64-cuda"]
 
 [tool.pixi.feature.gpu.dependencies]
 cuda-version = "12.8.*"

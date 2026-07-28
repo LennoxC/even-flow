@@ -1,6 +1,7 @@
 import torch
 from abc import ABC, abstractmethod
 from even_flow.config.AutoencoderConfig import AutoencoderConfig, ConvolutionalAutoencoderConfig
+from even_flow.module.conv.ConvLayer import ConvUpsampleLayer, ConvDownsampleLayer
 
 class AutoencoderBase(torch.nn.Module):
     """
@@ -58,7 +59,7 @@ class ConvolutionalAutoencoder(AutoencoderBase):
                                               in_channels=layer_config.in_channels,
                                               out_channels=layer_config.out_channels,
                                               kernel_size=layer_config.kernel_size,
-                                              activation=layer_config.activation,
+                                              activation=activation,
                                               downsample_method=layer_config.downsample_method))
         
         return torch.nn.Sequential(*layers)
@@ -74,7 +75,7 @@ class ConvolutionalAutoencoder(AutoencoderBase):
                                                 in_channels=layer_config.in_channels,
                                                 out_channels=layer_config.out_channels,
                                                 kernel_size=layer_config.kernel_size,
-                                                activation=layer_config.activation,
+                                                activation=activation,
                                                 upsample_method=layer_config.upsample_method))
         else:
             # If decoder_layers is None, create a reverse of the encoder with nearest upsampling
@@ -86,7 +87,7 @@ class ConvolutionalAutoencoder(AutoencoderBase):
                                                 in_channels=layer_config.out_channels,
                                                 out_channels=layer_config.in_channels,
                                                 kernel_size=layer_config.kernel_size,
-                                                activation=layer_config.activation,
+                                                activation=activation,
                                                 upsample_method="nearest"))
         
         return torch.nn.Sequential(*layers)

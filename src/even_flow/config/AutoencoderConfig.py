@@ -1,6 +1,6 @@
-from dataclass import dataclass
+from dataclasses import dataclass
 
-@dataclass
+@dataclass(kw_only=True)
 class AutoencoderConfig:
     input_dim: tuple[int, int, int] # input dims [channels, height, width]
     output_dim: tuple[int, int, int] = None # output dims [channels, height, width]. If None, output dims will be the same as input dims
