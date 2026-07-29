@@ -1,8 +1,10 @@
 import torch
 from abc import ABC, abstractmethod
-from even_flow.config.VariationalAutoencoderConfig import VariationalAutoencoderConfig, ConvolutionalVariationalAutoencoderConfig
+from even_flow.config.VariationalAutoencoderConfig import VariationalAutoencoderConfig, ConvolutionalVariationalAutoencoderConfig, ResNetLayerConfig
 from even_flow.module.conv.ConvLayer import ConvUpsampleLayer, ConvDownsampleLayer
-from even_flow.config.VariationalAutoencoderConfig import UpsampleLayerConfig
+from even_flow.module.conv.ResNetBlock import ResNetBlock
+from even_flow.config.VariationalAutoencoderConfig import UpsampleConvLayerConfig
+from even_flow.config.VariationalAutoencoderConfig import DownsampleConvLayerConfig, ConvLayerConfig, UpsampleConvLayerConfig
 
 class VariationalAutoencoderBase(torch.nn.Module):
     """
@@ -53,20 +55,8 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
     def build_encoder(self):
         layers = []
         for layer_config in self.config.encoder_layers:
+            layer = self._build_layer(layer_config, self.config)
 
-            activation = layer_config.activation if layer_config.activation is not None else self.config.activation
-
-            layers.append(ConvDownsampleLayer(dim=layer_config.dim,
-                                              in_channels=layer_config.in_channels,
-                                              out_channels=layer_config.out_channels,
-                                              kernel_size=layer_config.kernel_size,
-                                              activation=activation,
-                                              downsample_method=layer_config.downsample_method))
-
-            norm = self._norm(layer_config.out_channels, layer_config.dim)
-            if norm is not None:
-                layers.append(norm)
-        
         return torch.nn.Sequential(*layers)
 
     def build_decoder(self):
@@ -74,28 +64,74 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
 
         configs = self.config.decoder_layers if self.config.decoder_layers is not None else reversed(self.config.encoder_layers)
 
-        for layer_config in configs:
-            activation = layer_config.activation if layer_config.activation is not None else self.config.activation
-            upsample_method = layer_config.upsample_method if isinstance(layer_config, UpsampleLayerConfig) else "nearest"
+        # if using the reverse of the encoder layers, switch the sampling method from downsample to upsample and vice versa
+        configs = [UpsampleConvLayerConfig(**{**layer_config.__dict__, "sampling": "upsample" if layer_config.sampling == "downsample" else "downsample"}) 
+                    if isinstance(layer_config, DownsampleConvLayerConfig) else layer_config for layer_config in configs]
 
-            layers.append(ConvUpsampleLayer(dim=layer_config.dim,
-                                            in_channels=layer_config.in_channels,
-                                            out_channels=layer_config.out_channels,
-                                            kernel_size=layer_config.kernel_size,
-                                            activation=activation,
-                                            upsample_method=upsample_method))
-            
-            norm = self._norm(layer_config.out_channels, layer_config.dim)
-            if norm is not None:
-                layers.append(norm)
+        for layer_config in configs:
+            layer = self._build_layer(layer_config, self.config)
         
         return torch.nn.Sequential(*layers)
 
-    def _norm(self, channels, dim):
-        if self.config.group_norm:
-            return torch.nn.GroupNorm(1, channels)
-        
-        if self.config.batch_norm:
-            return getattr(torch.nn, f"BatchNorm{dim}d")(channels)
-        
-        return None
+    def _build_layer(self, layer_config, config):
+        # global vs layer specific activation and norm
+        activation = layer_config.activation if isinstance(layer_config, ResNetLayerConfig) and layer_config.activation is not None else self.config.activation
+        norm = layer_config.norm if layer_config.norm is not None else self.config.norm
+
+        if layer_config is ResNetLayerConfig:
+            layers.append(ResNetBlock(
+                dim=layer_config.dim,
+                in_channels=layer_config.in_channels,
+                out_channels=layer_config.out_channels,
+                kernel_size=layer_config.kernel_size if hasattr(layer_config, 'kernel_size') else 3,
+                norm=norm,
+                separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
+                sampling=layer_config.sampling if hasattr(layer_config, 'sampling') else None,
+                sample_factor=layer_config.sample_factor if hasattr(layer_config, 'sample_factor') else 2,
+                upsample_method=layer_config.upsample_method if hasattr(layer_config, 'upsample_method') else "nearest",
+                downsample_method=layer_config.downsample_method if hasattr(layer_config, 'downsample_method') else "strided",
+                activation=activation,
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'sampling', 'sample_factor', 'upsample_method', 'downsample_method', 'activation']}
+            ))
+
+        if layer_config is UpsampleConvLayerConfig:
+            layers.append(ConvUpsampleLayer(
+                dim=layer_config.dim,
+                in_channels=layer_config.in_channels,
+                out_channels=layer_config.out_channels,
+                kernel_size=layer_config.kernel_size if hasattr(layer_config, 'kernel_size') else 3,
+                norm=norm,
+                separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
+                upsample_method=layer_config.upsample_method if hasattr(layer_config, 'upsample_method') else "nearest",
+                sample_factor=layer_config.sample_factor if hasattr(layer_config, 'sample_factor') else 2,
+                activation=activation,
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'upsample_method', 'sample_factor', 'activation']}
+            ))
+
+        if layer_config is DownsampleConvLayerConfig:
+            layers.append(ConvDownsampleLayer(
+                dim=layer_config.dim,
+                in_channels=layer_config.in_channels,
+                out_channels=layer_config.out_channels,
+                kernel_size=layer_config.kernel_size if hasattr(layer_config, 'kernel_size') else 3,
+                norm=norm,
+                separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
+                downsample_method=layer_config.downsample_method if hasattr(layer_config, 'downsample_method') else "strided",
+                sample_factor=layer_config.sample_factor if hasattr(layer_config, 'sample_factor') else 2,
+                activation=activation,
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'downsample_method', 'sample_factor', 'activation']}
+            ))
+
+        if layer_config is ConvLayerConfig:
+            layers.append(ConvLayer(
+                dim=layer_config.dim,
+                in_channels=layer_config.in_channels,
+                out_channels=layer_config.out_channels,
+                kernel_size=layer_config.kernel_size if hasattr(layer_config, 'kernel_size') else 3,
+                norm=norm,
+                separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
+                activation=activation,
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'activation']}
+            ))
+
+    

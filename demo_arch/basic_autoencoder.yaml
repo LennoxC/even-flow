@@ -38,5 +38,4 @@ decoder_layers:
     activation: "Sigmoid"
     upsample_method: "nearest"
 activation: "GELU"
-group_norm: false
-batch_norm: false
+norm: "group"

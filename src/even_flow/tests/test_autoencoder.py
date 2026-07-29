@@ -1,56 +1,54 @@
 import pytest
 import torch
 from even_flow.module.autoencoder.VariationalAutoencoder import ConvolutionalVariationalAutoencoder
-from even_flow.config.VariationalAutoencoderConfig import ConvolutionalVariationalAutoencoderConfig, DownsampleLayerConfig, UpsampleLayerConfig
+from even_flow.config.VariationalAutoencoderConfig import ConvolutionalVariationalAutoencoderConfig, DownsampleConvLayerConfig, UpsampleConvLayerConfig, ResNetLayerConfig, ConvLayerConfig
 
 CONFIGS = [
     ConvolutionalVariationalAutoencoderConfig(
         input_dim=(3, 128, 128),
         encoder_layers=[
-            DownsampleLayerConfig(dim=2, in_channels=3, out_channels=16, kernel_size=3, activation="GELU", downsample_method="max"),
-            DownsampleLayerConfig(dim=2, in_channels=16, out_channels=32, kernel_size=3, activation="GELU", downsample_method="avg"),
-            DownsampleLayerConfig(dim=2, in_channels=32, out_channels=64, kernel_size=3, activation="GELU", downsample_method="max"),
+            DownsampleConvLayerConfig(dim=2, in_channels=3, out_channels=16, kernel_size=3, downsample_method="max"),
+            DownsampleConvLayerConfig(dim=2, in_channels=16, out_channels=32, kernel_size=3, downsample_method="avg"),
+            DownsampleConvLayerConfig(dim=2, in_channels=32, out_channels=64, kernel_size=3, downsample_method="max"),
         ],
         decoder_layers=[
-            UpsampleLayerConfig(dim=2, in_channels=64, out_channels=32, kernel_size=3, activation="GELU", upsample_method="nearest"),
-            UpsampleLayerConfig(dim=2, in_channels=32, out_channels=16, kernel_size=3, activation="GELU", upsample_method="bilinear"),
-            UpsampleLayerConfig(dim=2, in_channels=16, out_channels=3, kernel_size=3, activation="Sigmoid", upsample_method="nearest"),
+            UpsampleConvLayerConfig(dim=2, in_channels=64, out_channels=32, kernel_size=3, upsample_method="nearest"),
+            UpsampleConvLayerConfig(dim=2, in_channels=32, out_channels=16, kernel_size=3, upsample_method="bilinear"),
+            UpsampleConvLayerConfig(dim=2, in_channels=16, out_channels=3, kernel_size=3, upsample_method="nearest"),
         ],
         activation="GELU",
-        group_norm=False,
-        batch_norm=False),
+        norm="group"),
     
     ConvolutionalVariationalAutoencoderConfig(
         input_dim=(3, 128, 128),
         encoder_layers=[
-            DownsampleLayerConfig(dim=2, in_channels=3, out_channels=16, kernel_size=3, activation="GELU", downsample_method="max"),
-            DownsampleLayerConfig(dim=2, in_channels=16, out_channels=32, kernel_size=3, activation="GELU", downsample_method="avg"),
-            DownsampleLayerConfig(dim=2, in_channels=32, out_channels=64, kernel_size=3, activation="GELU", downsample_method="max"),
+            ResNetLayerConfig(dim=2, in_channels=3, out_channels=16, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="max"),
+            ResNetLayerConfig(dim=2, in_channels=16, out_channels=32, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="avg"),
+            ResNetLayerConfig(dim=2, in_channels=32, out_channels=64, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="max")
         ],
         decoder_layers=[
-            UpsampleLayerConfig(dim=2, in_channels=64, out_channels=32, kernel_size=3, activation="GELU", upsample_method="nearest"),
-            UpsampleLayerConfig(dim=2, in_channels=32, out_channels=16, kernel_size=3, activation="GELU", upsample_method="bilinear"),
-            UpsampleLayerConfig(dim=2, in_channels=16, out_channels=3, kernel_size=3, activation="Sigmoid", upsample_method="nearest"),
+            ResNetLayerConfig(dim=2, in_channels=64, out_channels=32, kernel_size=3, activation="GELU", sampling="upsample", upsample_method="nearest"),
+            ResNetLayerConfig(dim=2, in_channels=32, out_channels=16, kernel_size=3, activation="GELU", sampling="upsample", upsample_method="bilinear"),
+            ResNetLayerConfig(dim=2, in_channels=16, out_channels=3, kernel_size=3, activation="Sigmoid", sampling="upsample", upsample_method="nearest")
         ],
-        activation="GELU",
-        group_norm=True,
-        batch_norm=False),
+        activation="ReLU",
+        norm="batch"),
     
     ConvolutionalVariationalAutoencoderConfig(
         input_dim=(3, 128, 128),
         encoder_layers=[
-            DownsampleLayerConfig(dim=2, in_channels=3, out_channels=16, kernel_size=3, activation="GELU", downsample_method="max"),
-            DownsampleLayerConfig(dim=2, in_channels=16, out_channels=32, kernel_size=3, activation="GELU", downsample_method="avg"),
-            DownsampleLayerConfig(dim=2, in_channels=32, out_channels=64, kernel_size=3, activation="GELU", downsample_method="max"),
+            ResNetLayerConfig(dim=2, in_channels=3, out_channels=16, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="max"),
+            ResNetLayerConfig(dim=2, in_channels=16, out_channels=32, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="avg"),
+            ResNetLayerConfig(dim=2, in_channels=32, out_channels=64, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="max"),
+            ConvLayerConfig(dim=2, in_channels=64, out_channels=128, kernel_size=3)
         ],
         decoder_layers=[
-            UpsampleLayerConfig(dim=2, in_channels=64, out_channels=32, kernel_size=3, activation="GELU", upsample_method="nearest"),
-            UpsampleLayerConfig(dim=2, in_channels=32, out_channels=16, kernel_size=3, activation="GELU", upsample_method="bilinear"),
-            UpsampleLayerConfig(dim=2, in_channels=16, out_channels=3, kernel_size=3, activation="Sigmoid", upsample_method="nearest"),
+            ConvLayerConfig(dim=2, in_channels=128, out_channels=64, kernel_size=3),
+            ResNetLayerConfig(dim=2, in_channels=64, out_channels=32, kernel_size=3, activation="GELU", sampling="upsample", upsample_method="nearest"),
+            ResNetLayerConfig(dim=2, in_channels=32, out_channels=16, kernel_size=3, activation="GELU", sampling="upsample", upsample_method="bilinear"),
+            ResNetLayerConfig(dim=2, in_channels=16, out_channels=3, kernel_size=3, activation="Sigmoid", sampling="upsample", upsample_method="nearest")
         ],
-        activation="GELU",
-        group_norm=False,
-        batch_norm=True)
+        activation="GELU")
 ]
 
 @pytest.mark.parametrize("model_config", CONFIGS)

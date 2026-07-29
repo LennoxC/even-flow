@@ -1,7 +1,7 @@
 import pytest
 import torch
 from even_flow.module.autoencoder.VariationalAutoencoder import ConvolutionalVariationalAutoencoder
-from even_flow.config.VariationalAutoencoderConfig import ConvolutionalVariationalAutoencoderConfig, DownsampleLayerConfig, UpsampleLayerConfig
+from even_flow.config.VariationalAutoencoderConfig import ConvolutionalVariationalAutoencoderConfig, DownsampleConvLayerConfig, UpsampleConvLayerConfig
 from even_flow.utils.load_yaml import load_yaml
 
 def test_forward_conv_VariationalAutoencoder():
