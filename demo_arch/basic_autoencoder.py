@@ -1,4 +1,4 @@
-# still thinking about the best way to handle this
+# TODO: still thinking about the best way to handle this
 
 basic_autoencoder = ConvolutionalVariationalAutoencoderConfig(
         input_dim=(3, 128, 128),

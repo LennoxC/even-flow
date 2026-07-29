@@ -7,6 +7,14 @@ from abc import ABC, abstractmethod
 # - activation is no longer passed into ConvBase
 
 class ConvBase(torch.nn.Module):
+    """
+    A base convolutional layer (1d, 2d, 3d).
+    - This is an abstract class and should not be instantiated directly. Use ConvLayer, ConvUpsampleLayer, or ConvDownsampleLayer instead.
+    - The convolutional layer can be separable or not. If separable, the convolution is implemented as a depthwise convolution followed by a pointwise convolution.
+    - The convolutional layer can be followed by a normalization layer (group or batch normalization) if specified.
+    - Activations are not included in this base class, and should be added as a separate layer if desired. ResNetBlocks implement an activation, and are composed of two ConvBase layers.
+    """
+
     def __init__(self,
                  dim: int, 
                  in_channels: int, 
@@ -86,7 +94,7 @@ class ConvLayer(ConvBase):
 
 class ConvUpsampleLayer(ConvBase):
     """
-    A basic convolutional layer (1d, 2d, 3d) with an activation function and upsampling.
+    A basic convolutional layer (1d, 2d, 3d) with upsampling.
     Include upsampling using a specified method (e.g., nearest, bilinear, trilinear) or transposed convolution.
     """
     def __init__(self, 
@@ -95,7 +103,13 @@ class ConvUpsampleLayer(ConvBase):
                     **kwargs):
         super().__init__(**kwargs)
 
+        # dimensionality checks for upsampling methods
         self.upsample_method = upsample_method
+        if self.upsample_method == "bilinear" and self.dim != 2:
+            raise ValueError(f"bilinear upsampling is only supported for 2D convolutions, but got dim={self.dim}")
+        if self.upsample_method == "trilinear" and self.dim != 3:
+            raise ValueError(f"trilinear upsampling is only supported for 3D convolutions, but got dim={self.dim}")
+
         self.upsample_factor = sample_factor
         if upsample_method == "transposed":
             if self.separable: # if separable, then self.conv is a sequential of two convolutions.
@@ -142,5 +156,8 @@ class ConvDownsampleLayer(ConvBase):
         return f"ConvDownsampleLayer{self.dim}d, in_channels={self.in_channels}, out_channels={self.out_channels}, kernel_size={self.conv.kernel_size}, downsample_method={self.downsample_method})"
 
     def postprocess(self, x):
-        x = self.downsample(x)
+        if self.downsample_method != "strided":
+            x = self.downsample(x)
+        
+        # if self.downsample_method == "strided", downsampling is already handled in the convolutional layer, so no need to downsample again.
         return x
