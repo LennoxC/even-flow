@@ -1,10 +1,10 @@
 import pytest
 import torch
-from even_flow.module.autoencoder.Autoencoder import ConvolutionalAutoencoder
-from even_flow.config.AutoencoderConfig import ConvolutionalAutoencoderConfig, DownsampleLayerConfig, UpsampleLayerConfig
+from even_flow.module.autoencoder.VariationalAutoencoder import ConvolutionalVariationalAutoencoder
+from even_flow.config.VariationalAutoencoderConfig import ConvolutionalVariationalAutoencoderConfig, DownsampleLayerConfig, UpsampleLayerConfig
 
 CONFIGS = [
-    ConvolutionalAutoencoderConfig(
+    ConvolutionalVariationalAutoencoderConfig(
         input_dim=(3, 128, 128),
         encoder_layers=[
             DownsampleLayerConfig(dim=2, in_channels=3, out_channels=16, kernel_size=3, activation="GELU", downsample_method="max"),
@@ -20,7 +20,7 @@ CONFIGS = [
         group_norm=False,
         batch_norm=False),
     
-    ConvolutionalAutoencoderConfig(
+    ConvolutionalVariationalAutoencoderConfig(
         input_dim=(3, 128, 128),
         encoder_layers=[
             DownsampleLayerConfig(dim=2, in_channels=3, out_channels=16, kernel_size=3, activation="GELU", downsample_method="max"),
@@ -36,7 +36,7 @@ CONFIGS = [
         group_norm=True,
         batch_norm=False),
     
-    ConvolutionalAutoencoderConfig(
+    ConvolutionalVariationalAutoencoderConfig(
         input_dim=(3, 128, 128),
         encoder_layers=[
             DownsampleLayerConfig(dim=2, in_channels=3, out_channels=16, kernel_size=3, activation="GELU", downsample_method="max"),
@@ -54,9 +54,9 @@ CONFIGS = [
 ]
 
 @pytest.mark.parametrize("model_config", CONFIGS)
-def test_forward_conv_autoencoder(model_config):
+def test_forward_conv_VariationalAutoencoder(model_config):
     config = model_config
-    model = ConvolutionalAutoencoder(config)
+    model = ConvolutionalVariationalAutoencoder(config)
     input_tensor = torch.randn(1, *config.input_dim)  # Batch size of 1
     output_tensor = model(input_tensor)
     assert output_tensor.shape == input_tensor.shape, f"Expected output shape {input_tensor.shape}, but got {output_tensor.shape}"

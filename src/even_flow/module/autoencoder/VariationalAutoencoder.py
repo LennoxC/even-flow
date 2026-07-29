@@ -1,18 +1,18 @@
 import torch
 from abc import ABC, abstractmethod
-from even_flow.config.AutoencoderConfig import AutoencoderConfig, ConvolutionalAutoencoderConfig
+from even_flow.config.VariationalAutoencoderConfig import VariationalAutoencoderConfig, ConvolutionalVariationalAutoencoderConfig
 from even_flow.module.conv.ConvLayer import ConvUpsampleLayer, ConvDownsampleLayer
-from even_flow.config.AutoencoderConfig import UpsampleLayerConfig
+from even_flow.config.VariationalAutoencoderConfig import UpsampleLayerConfig
 
-class AutoencoderBase(torch.nn.Module):
+class VariationalAutoencoderBase(torch.nn.Module):
     """
-    A base Autoencoder implementation.
-    - Use AutoencoderConfig to configure the model.
+    A base Variational Autoencoder implementation.
+    - Use Variational AutoencoderConfig to configure the model.
     - ConvLayer is used for the encoder and decoder.
     - The encoder outputs the mean and log variance of the latent space.
     - This will be used by the flow matching module to sample from the latent space.
     """
-    def __init__(self, config: AutoencoderConfig):
+    def __init__(self, config: VariationalAutoencoderConfig):
         super().__init__()
         self.config = config
 
@@ -40,14 +40,14 @@ class AutoencoderBase(torch.nn.Module):
         return x_recon
 
     
-class ConvolutionalAutoencoder(AutoencoderBase):
+class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
     """
-    A basic Convolutional Autoencoder implementation.
-    - Use ConvolutionalAutoencoderConfig to configure the model.
+    A basic Convolutional VariationalAutoencoder implementation.
+    - Use ConvolutionalVariationalAutoencoderConfig to configure the model.
     - UNets are constructed for the encoder and decoder.
     """
 
-    def __init__(self, config: ConvolutionalAutoencoderConfig):
+    def __init__(self, config: ConvolutionalVariationalAutoencoderConfig):
         super().__init__(config)
 
     def build_encoder(self):
