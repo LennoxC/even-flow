@@ -130,3 +130,12 @@ class DownsampleConvLayerConfig(ConvLayerConfig):
 class UpsampleConvLayerConfig(ConvLayerConfig):
     upsample_method: str = "nearest" # upsampling method (nearest, bilinear, trilinear, or transposed)
     sample_factor: int = 2 # upsampling factor
+
+@dataclass
+class PatchAttentionLayerConfig:
+    dim: int # dimension of the input (1, 2, or 3)
+    channels: int # number of input channels
+    num_heads: int = 4 # number of attention heads
+    patch_size: int = 1 # size of the patches for attention
+    norm: str = "group" # normalization method
+    dropout: float = 0.0 # dropout rate

@@ -1,7 +1,7 @@
 import pytest
 import torch
 from even_flow.module.autoencoder.VariationalAutoencoder import ConvolutionalVariationalAutoencoder
-from even_flow.config.VariationalAutoencoderConfig import ConvolutionalVariationalAutoencoderConfig, ProbabilisticLayerConfig, DownsampleConvLayerConfig, UpsampleConvLayerConfig, ResNetLayerConfig, ConvLayerConfig, ActivationLayerConfig
+from even_flow.config.VariationalAutoencoderConfig import ConvolutionalVariationalAutoencoderConfig, ProbabilisticLayerConfig, DownsampleConvLayerConfig, UpsampleConvLayerConfig, ResNetLayerConfig, ConvLayerConfig, ActivationLayerConfig, PatchAttentionLayerConfig
 
 """
 Testing conv layers in 3D. The VariationalAutoencoder should be able to handle 3D inputs and outputs -e.g. time varying 2D reanalysis, or 3D reanalysis.
@@ -62,7 +62,7 @@ CONFIGS = [
             ActivationLayerConfig(activation="GELU")
         ],
         probabilistic_layer=ProbabilisticLayerConfig(dim=3, latent_dim=64, channels=128, logvar_clamp=(-30.0, 30.0)),
-        activation="GELU"),
+        activation="GELU")
 ]
 
 @pytest.fixture(autouse=True)
@@ -76,11 +76,13 @@ def model_and_input(request):
     x = torch.randn(1, *config.input_dim)
     return model, x
 
+@pytest.mark.fast
 def test_forward_shape(model_and_input):
     model, x = model_and_input
     recon, mean, log_var = model(x)
     assert recon.shape == x.shape
 
+@pytest.mark.detailed
 def test_gradients_flow(model_and_input):
     # after a forward + backward pass, all parameters should have non-zero gradients
     model, x = model_and_input
@@ -90,6 +92,7 @@ def test_gradients_flow(model_and_input):
         assert p.grad is not None, f"{name} got no gradient at all (likely disconnected from graph)"
         assert p.grad.abs().sum() > 0, f"{name} gradient is entirely zero across all elements"
 
+@pytest.mark.detailed
 def test_determinism(model_and_input):
     # when train=False, the model output should be deterministic. I.e. check z == mean when train=False
     model, x = model_and_input

@@ -43,3 +43,9 @@ pytorch-gpu = "*"
 [tool.pixi.dependencies]
 dataclasses = ">=0.8,<0.9"
 pyyaml = ">=6.0.3,<7"
+
+[tool.pytest.ini_options]
+markers = [
+    "fast: marks tests as fast",
+    "detailed: thorough testing including gradients and determinism"
+]
