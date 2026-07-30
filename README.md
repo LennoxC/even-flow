@@ -19,8 +19,9 @@ Running the tests is the easiest way to check that some basic models still compi
 Tests are grouped:
 - fast
 - detailed
+- demos
 
-You can alternatively choose to just run the fast tests, either with the -m flag, or selecting "run fast tests" from the vscode tasks. Some of the detailed tests require backprop which may not be feasible on slow computers. The fast tests still perform a forward pass.
+You can alternatively choose to just run the fast tests, either with the -m flag, or selecting "run fast tests" from the vscode tasks. Some of the detailed tests require backprop which may not be feasible on slow computers. The fast tests still perform a forward pass. The 'demos' tests are just for the demonstration models (checking that these compile).
 
 ```
 pixi run --environment test pytest ./src/even_flow/tests
