@@ -1,9 +1,16 @@
+from __future__ import annotations
 from dataclasses import dataclass
-
-# TODO: Group these into different files for clarity
 
 @dataclass(kw_only=True)
 class VariationalAutoencoderConfig:
+    """
+    Base configuration for a variational autoencoder. This class is intended to be subclassed for specific types of VAEs, such as convolutional VAEs or fully connected VAEs.
+    
+    Attributes:
+        input_dim: tuple[int, int, int] - the dimensions of the input data (channels, height, width)
+        output_dim: tuple[int, int, int] - the dimensions of the output data (channels, height, width). If None, output dims will be the same as input dims.
+        activation: str - the default activation function to use if activation attributes are not specified in the layer configs (layer activations always override this default).
+    """
     input_dim: tuple[int, int, int] # input dims [channels, height, width]
     output_dim: tuple[int, int, int] = None # output dims [channels, height, width]. If None, output dims will be the same as input dims
 
@@ -11,18 +18,35 @@ class VariationalAutoencoderConfig:
 
 @dataclass
 class ConvolutionalVariationalAutoencoderConfig(VariationalAutoencoderConfig):
-    # TODO: These classes are misleading as they could be a range of different layers types.
-    encoder_layers: list[DownsampleConvLayerConfig] # list of layer configurations
+    """
+    Configuration for a convolutional variational autoencoder. This class extends the base VariationalAutoencoderConfig with additional attributes specific to convolutional VAEs.
+
+    Attributes:
+        encoder_layers: list[DownsampleConvLayerConfig | ConvLayerConfig | ResNetLayerConfig | ActivationLayerConfig | PatchAttentionLayerConfig] - a list of layer configurations for the encoder
+        probabilistic_layer: ProbabilisticLayerConfig - the configuration for the probabilistic layer (latent moments)
+        decoder_layers: list[UpsampleConvLayerConfig | ConvLayerConfig | ResNetLayerConfig | ActivationLayerConfig | PatchAttentionLayerConfig] - a list of layer configurations for the decoder. If None, the decoder will be the reverse of the encoder with nearest upsampling.
+        static_dim: tuple[int, int, int] - the dimensions of the static input data (channels, height, width). If None, no static encoder will be used.
+        static_layers: list[DownsampleConvLayerConfig | ConvLayerConfig | ResNetLayerConfig | ActivationLayerConfig | PatchAttentionLayerConfig] - a list of layer configurations for the static encoder. If None, no static encoder will be used.
+        norm: str - the normalization method to use (e.g. "group", "batch", or None). This is the default normalization method to use if norm attributes are not specified in the layer configs (layer norms always override this default).
+    """
+    encoder_layers: list[DownsampleConvLayerConfig | ConvLayerConfig | ResNetLayerConfig | ActivationLayerConfig | PatchAttentionLayerConfig] # list of layer configurations
     probabilistic_layer: ProbabilisticLayerConfig # configuration for the probabilistic layer (latent moments)
-    decoder_layers: list[UpsampleConvLayerConfig] = None # list of layer configurations. If None, decoder will be the reverse of the encoder with nearest upsampling
+    decoder_layers: list[UpsampleConvLayerConfig | ConvLayerConfig | ResNetLayerConfig | ActivationLayerConfig | PatchAttentionLayerConfig] = None # list of layer configurations. If None, decoder will be the reverse of the encoder with nearest upsampling
     static_dim: tuple[int, int, int] = None # input dims for the static encoder [channels, height, width]. If None, no static encoder will be used.
-    static_layers: list[ResNetLayerConfig] = None # list of layer configurations for the static encoder. If None, no static encoder will be used.
+    static_layers: list[DownsampleConvLayerConfig | ConvLayerConfig | ResNetLayerConfig | ActivationLayerConfig | PatchAttentionLayerConfig] = None # list of layer configurations for the static encoder. If None, no static encoder will be used.
     norm: str = "group"
 
     def __post_init__(self):
-        # if a terrain encoder is used, validate the channel dims of the static encoder and decoder layers match for skip connections
+        # if a static encoder is used, validate the channel dims of the static encoder and decoder layers match for skip connections
         if self.static_layers is None:
             return
+
+        # if static layers are used but the static_dim is not specified, raise an error
+        if self.static_dim is None:
+            raise ValueError(
+                "static_layers is not None but static_dim is None. "
+                "If static_layers are used, static_dim must be specified."
+            )
 
         emit_channels = [
             layer.out_channels for layer in self.static_layers
@@ -75,135 +99,3 @@ class ConvolutionalVariationalAutoencoderConfig(VariationalAutoencoderConfig):
 
             running_channels = layer.out_channels
 
-@dataclass
-class ActivationLayerConfig:
-    activation: str = "GELU" # activation function
-
-@dataclass
-class ProbabilisticLayerConfig:
-    latent_dim: int
-    channels: int
-    dim: int = 2
-    logvar_clamp: tuple[float, float] = (-30.0, 20.0)
-
-@dataclass
-class ResNetLayerConfig:
-    dim: int
-    in_channels: int
-    out_channels: int
-    kernel_size: int = 3
-    norm: str = None # normalization method (group, batch, or None)
-    separable: bool = False
-    sampling: str = None # "upsample" or "downsample" or None (same resolution)
-    sample_factor: int = 2
-    upsample_method: str = "nearest"
-    downsample_method: str = "strided"
-    activation: str = "GELU"
-    emit_skip: bool = False # whether to emit a skip connection from this layer to the decoder
-    receives_skip: bool = False # whether to receive a skip connection from the encoder
-
-    def convert_to_decoder_layer(self):
-        """
-        Utility method to convert an encoder layer config to a decoder layer config.
-        This is useful for when the decoder is the reverse of the encoder.
-        """
-        if self.sampling == "downsample":
-            return ResNetLayerConfig(
-                dim=self.dim,
-                in_channels=self.out_channels,
-                out_channels=self.in_channels,
-                kernel_size=self.kernel_size,
-                norm=self.norm,
-                separable=self.separable,
-                sampling="upsample",
-                sample_factor=self.sample_factor,
-                upsample_method="nearest" if self.downsample_method == "max" else "bilinear",
-                activation=self.activation,
-                receives_skip=self.emit_skip,
-                emit_skip=self.receives_skip
-            )
-        elif self.sampling == "upsample":
-            return ResNetLayerConfig(
-                dim=self.dim,
-                in_channels=self.out_channels,
-                out_channels=self.in_channels,
-                kernel_size=self.kernel_size,
-                norm=self.norm,
-                separable=self.separable,
-                sampling="downsample",
-                sample_factor=self.sample_factor,
-                downsample_method="max" if self.upsample_method == "nearest" else "avg",
-                activation=self.activation,
-                receives_skip=self.emit_skip,
-                emit_skip=self.receives_skip
-            )
-        else:
-            return ResNetLayerConfig(
-                dim=self.dim,
-                in_channels=self.out_channels,
-                out_channels=self.in_channels,
-                kernel_size=self.kernel_size,
-                norm=self.norm,
-                separable=self.separable,
-                sampling=None,
-                activation=self.activation,
-                receives_skip=self.emit_skip,
-                emit_skip=self.receives_skip
-            )
-
-@dataclass
-class ConvLayerConfig:
-    dim: int # dimension of the convolution (1, 2, or 3)
-    in_channels: int # number of input channels
-    out_channels: int # number of output channels
-    kernel_size: int # size of the convolution kernel
-    norm: str = "group" # normalization method
-    separable: bool = False # whether to use separable convolutions
-
-    def convert_to_decoder_layer(self):
-        """
-        Utility method to flip the in_channels and out_channels. This is useful for converting an encoder layer config to a decoder layer config.
-        """
-        return ConvLayerConfig(
-            dim=self.dim,
-            in_channels=self.out_channels,
-            out_channels=self.in_channels,
-            kernel_size=self.kernel_size,
-            norm=self.norm,
-            separable=self.separable
-        )
-
-@dataclass
-class DownsampleConvLayerConfig(ConvLayerConfig):
-    downsample_method: str = "max" # downsampling method (max, avg, or strided)
-    sample_factor: int = 2 # downsampling factor
-    emit_skip: bool = False # whether to emit a skip connection from this layer to the decoder
-
-    # utility method to convert to an UpsampleConvLayerConfig, for use when the decoder is the reverse of the encoder
-    def convert_to_decoder_layer(self):
-        return UpsampleConvLayerConfig(
-            dim=self.dim,
-            in_channels=self.out_channels,
-            out_channels=self.in_channels,
-            kernel_size=self.kernel_size,
-            norm=self.norm,
-            separable=self.separable,
-            upsample_method="nearest" if self.downsample_method == "max" else "bilinear",
-            sample_factor=self.sample_factor
-        )
-
-
-@dataclass
-class UpsampleConvLayerConfig(ConvLayerConfig):
-    upsample_method: str = "nearest" # upsampling method (nearest, bilinear, trilinear, or transposed)
-    sample_factor: int = 2 # upsampling factor
-    receives_skip: bool = False # whether to receive a skip connection from the encoder
-
-@dataclass
-class PatchAttentionLayerConfig:
-    dim: int # dimension of the input (1, 2, or 3)
-    channels: int # number of input channels
-    num_heads: int = 4 # number of attention heads
-    patch_size: int = 1 # size of the patches for attention
-    norm: str = "group" # normalization method
-    dropout: float = 0.0 # dropout rate

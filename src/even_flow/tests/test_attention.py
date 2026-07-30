@@ -1,10 +1,10 @@
 import pytest
 import torch
 from even_flow.module.autoencoder.VariationalAutoencoder import ConvolutionalVariationalAutoencoder
-from even_flow.config.VariationalAutoencoderConfig import ConvolutionalVariationalAutoencoderConfig, ProbabilisticLayerConfig, DownsampleConvLayerConfig, UpsampleConvLayerConfig, ResNetLayerConfig, ConvLayerConfig, ActivationLayerConfig, PatchAttentionLayerConfig
+from even_flow.config import ConvolutionalVariationalAutoencoderConfig, ProbabilisticLayerConfig, DownsampleConvLayerConfig, UpsampleConvLayerConfig, ResNetLayerConfig, ConvLayerConfig, ActivationLayerConfig, PatchAttentionLayerConfig
 
 CONFIGS = [
-    # test ResNetBlock layers + a single PatchAttentionBlock layer in the encoder and decoder
+    # test ResNetLayer layers + a single PatchAttentionBlock layer in the encoder and decoder
     ConvolutionalVariationalAutoencoderConfig(
         input_dim=(3, 128, 128),
         encoder_layers=[

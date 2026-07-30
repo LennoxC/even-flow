@@ -1,13 +1,15 @@
 import torch
 from abc import ABC, abstractmethod
-from even_flow.config.VariationalAutoencoderConfig import VariationalAutoencoderConfig, ConvolutionalVariationalAutoencoderConfig, ResNetLayerConfig
-from even_flow.module.conv.ConvLayer import ConvUpsampleLayer, ConvDownsampleLayer, ConvLayer
+from even_flow.config import VariationalAutoencoderConfig, ConvolutionalVariationalAutoencoderConfig, ResNetLayerConfig
+from even_flow.module.conv.ConvLayer import UpsampleConvLayer, DownsampleConvLayer, ConvLayer
 from even_flow.module.activation.ActivationLayer import ActivationLayer
-from even_flow.module.conv.ResNetBlock import ResNetBlock
+from even_flow.module.conv.ResNetLayer import ResNetLayer
 from even_flow.module.patch_attention.PatchAttentionBlock import PatchAttentionLayer
-from even_flow.config.VariationalAutoencoderConfig import UpsampleConvLayerConfig
-from even_flow.config.VariationalAutoencoderConfig import DownsampleConvLayerConfig, ConvLayerConfig, UpsampleConvLayerConfig, ActivationLayerConfig, PatchAttentionLayerConfig
+from even_flow.config import UpsampleConvLayerConfig
+from even_flow.config import DownsampleConvLayerConfig, ConvLayerConfig, UpsampleConvLayerConfig, ActivationLayerConfig, PatchAttentionLayerConfig
 from even_flow.module.vae.ProbabilisticLayer import ProbabilisticLatentEncoder, ProbabilisticLatentDecoder, reparameterize
+from even_flow.module.autoencoder.StaticEncoder import StaticEncoder
+from even_flow.module.autoencoder.Decoder import Decoder
 
 class VariationalAutoencoderBase(torch.nn.Module):
     """
@@ -15,7 +17,7 @@ class VariationalAutoencoderBase(torch.nn.Module):
     - Use VariationalAutoencoderConfig to configure the model. 
         - This must contain at least an encoder_layers list and a probabilistic_layer config. 
         - The decoder_layers list is optional, and if not provided, the decoder will be the reverse of the encoder.
-    - The encoder and decoder can be made from any combination of ConvLayer, ResNetBlock, UpsampleConvLayer, DownsampleConvLayer, and ActivationLayer.
+    - The encoder and decoder can be made from any combination of ConvLayer, ResNetLayer, UpsampleConvLayer, DownsampleConvLayer, and ActivationLayer.
     - The encoder outputs the mean and log variance of the latent space.
     - When the model is in .eval() mode, the mean of the latent space is used instead of sampling from it.
     - This will be used by the flow matching module to sample from the latent space.
@@ -49,24 +51,12 @@ class VariationalAutoencoderBase(torch.nn.Module):
     def encode(self, x):
         return self.encoder(x)      # mean, log_var
 
-    def static_encode(self, x):
-        if self.config.static_layers is not None:
-            return self.static_encoder(x)
-        else:
-            return None
-
     def sample(self, mean, log_var):
         # when model.eval() is called, the model is in evaluation mode and we should return the mean of the latent space instead of sampling from it
         if self.training:
             return reparameterize(mean, log_var)
         return mean
-
-    def count_parameters(self):
-        return sum(p.numel() for p in self.parameters())
-
-    def count_trainable_parameters(self):
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
+    
     def decode(self, z, static_skips=None):
         return self.decoder(z, static_skips)
 
@@ -88,6 +78,73 @@ class VariationalAutoencoderBase(torch.nn.Module):
         else:
             raise ValueError("No static layers defined in the config. Cannot precompute static skips.")
 
+    # ========== utility functions ==========
+
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters())
+
+    def count_trainable_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def calculate_latent_dimensionality(self):
+        """
+        Calculate the dimensionality of the latent space based on the encoder output.
+        This is useful for determining the size of the latent space for the flow model.
+        """
+        # create a dummy input tensor with the same shape as the input data
+        dummy_input = torch.randn(1, *self.config.input_dim)
+        mean, log_var = self.encode(dummy_input)
+        return torch.prod(torch.tensor(mean.shape[1:])).item()  # exclude batch dimension
+
+    def find_latent_dim_shape(self):
+        """
+        Find the shape of the latent space based on the encoder output.
+        This is useful for determining the shape of the latent space for the flow model.
+        """
+        # create a dummy input tensor with the same shape as the input data
+        dummy_input = torch.randn(1, *self.config.input_dim)
+        mean, log_var = self.encode(dummy_input)
+        return mean.shape[1:]  # exclude batch dimension
+
+    def calculate_input_dimensionality(self):
+        """
+        Calculate the number of elements in the input tensor based on the input dimensions specified in the config.
+        """
+        return torch.prod(torch.tensor(self.config.input_dim)).item()  # exclude batch dimension
+
+    def calculate_percentage_reduction(self):
+        """
+        Calculate the percentage reduction in dimensionality from the input to the latent space.
+        This is useful for determining how much information is being compressed by the encoder.
+        """
+        input_dimensionality = self.calculate_input_dimensionality()
+        latent_dimensionality = self.calculate_latent_dimensionality()
+        return (1 - (latent_dimensionality / input_dimensionality)) * 100
+
+    def print_model_summary(self, verbose=False):
+        """
+        Print a summary of the model, including the number of parameters and the percentage reduction in dimensionality.
+        """
+        print(f"Model Summary {'(Abbreviated)' if not verbose else '(Verbose)'}:")
+        print(f"{'Pass verbose=True to see layer details' if not verbose else 'Pass verbose=False to see summary only'}")
+        print('='*20)
+        print(f"Number of parameters: {self.count_parameters()}")
+        print(f"Number of trainable parameters: {self.count_trainable_parameters()}")
+        print(f"Input dimensionality: {self.calculate_input_dimensionality()}: ({' x '.join(str(dim) for dim in self.config.input_dim)})")
+        print(f"Latent dimensionality: {self.calculate_latent_dimensionality()}: ({' x '.join(str(dim) for dim in self.find_latent_dim_shape())})")
+        print(f"Percentage reduction in dimensionality: {self.calculate_percentage_reduction():.2f}%")
+        print('='*20)
+        if verbose:
+            print("Encoder:")
+            print(self.encoder)
+            print('-'*20)
+            print("Decoder:")
+            print(self.decoder)
+            if self.config.static_layers is not None:
+                print('-'*20)
+                print("Static Encoder:")
+                print(self.static_encoder)
+        
     
 class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
     """
@@ -95,7 +152,7 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
     - Use ConvolutionalVariationalAutoencoderConfig to configure the model.
     - UNets are constructed for the encoder and decoder.
     - ResNet blocks or ConvLayer blocks can be used for the encoder and decoder.
-    - If the ConvLayer blocks upsample or downsample, then use the corresponding ConvUpsampleLayer or ConvDownsampleLayer blocks for the decoder.
+    - If the ConvLayer blocks upsample or downsample, then use the corresponding UpsampleConvLayer or DownsampleConvLayer blocks for the decoder.
     """
 
     def __init__(self, config: ConvolutionalVariationalAutoencoderConfig):
@@ -115,13 +172,6 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
         layers.append(probabilistic_encoder)
 
         return torch.nn.Sequential(*layers)
-
-    def build_static_encoder(self):
-        layers, emit_flags = [], []
-        for layer_config in self.config.static_layers:
-            layers.append(self._build_layer(layer_config, self.config))
-            emit_flags.append(getattr(layer_config, 'emit_skip', False))
-        return StaticEncoder(layers, emit_flags)
 
     def build_decoder(self):
         # if decoder layers are provided, use them. Otherwise, use the reverse of the encoder layers and convert to upsample layers
@@ -143,6 +193,13 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
             receive_flags.append(getattr(layer_config, 'receives_skip', False))
         return Decoder(layers, receive_flags)
 
+    def build_static_encoder(self):
+        layers, emit_flags = [], []
+        for layer_config in self.config.static_layers:
+            layers.append(self._build_layer(layer_config, self.config))
+            emit_flags.append(getattr(layer_config, 'emit_skip', False))
+        return StaticEncoder(layers, emit_flags)
+
     def _build_layer(self, layer_config, config):
         """
         Converts from config files into actual layer objects.
@@ -156,7 +213,7 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
         norm = layer_config.norm if layer_config.norm is not None else self.config.norm
 
         if isinstance(layer_config, ResNetLayerConfig):
-            return ResNetBlock(
+            return ResNetLayer(
                 dim=layer_config.dim,
                 in_channels=layer_config.in_channels,
                 out_channels=layer_config.out_channels,
@@ -172,7 +229,7 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
             )
 
         if isinstance(layer_config, UpsampleConvLayerConfig):
-            return ConvUpsampleLayer(
+            return UpsampleConvLayer(
                 dim=layer_config.dim,
                 in_channels=layer_config.in_channels,
                 out_channels=layer_config.out_channels,
@@ -185,7 +242,7 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
             )
 
         if isinstance(layer_config, DownsampleConvLayerConfig):
-            return ConvDownsampleLayer(
+            return DownsampleConvLayer(
                 dim=layer_config.dim,
                 in_channels=layer_config.in_channels,
                 out_channels=layer_config.out_channels,
@@ -240,34 +297,5 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
             # skip other layer types (e.g., ActivationLayerConfig) as they don't need to be converted
             return layer_config
 
-class StaticEncoder(torch.nn.Module):
-    def __init__(self, layers: list[torch.nn.Module], emit_flags: list[bool]):
-        super().__init__()
-        self.layers = torch.nn.ModuleList(layers)
-        self.emit_flags = emit_flags
 
-    def forward(self, x):
-        skips = []
-        for layer, emit in zip(self.layers, self.emit_flags):
-            x = layer(x)
-            if emit:
-                skips.append(x)
-        return x, skips
 
-class Decoder(torch.nn.Module):
-    def __init__(self, layers: list[torch.nn.Module], receive_flags: list[bool]):
-        super().__init__()
-        self.layers = torch.nn.ModuleList(layers)
-        self.receive_flags = receive_flags
-
-    def forward(self, z, static_skips):
-        # static_skips arrives fine->coarse (from StaticEncoder).
-        # decoder runs coarse->fine, so consume in reverse order.
-        skip_stack = list(reversed(static_skips))
-        x = z
-        for layer, receives in zip(self.layers, self.receive_flags):
-            if receives:
-                skip = skip_stack.pop(0)
-                x = torch.cat([x, skip], dim=1)
-            x = layer(x)
-        return x

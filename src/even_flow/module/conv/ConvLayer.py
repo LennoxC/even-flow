@@ -9,10 +9,10 @@ from abc import ABC, abstractmethod
 class ConvBase(torch.nn.Module):
     """
     A base convolutional layer (1d, 2d, 3d).
-    - This is an abstract class and should not be instantiated directly. Use ConvLayer, ConvUpsampleLayer, or ConvDownsampleLayer instead.
+    - This is an abstract class and should not be instantiated directly. Use ConvLayer, UpsampleConvLayer, or DownsampleConvLayer instead.
     - The convolutional layer can be separable or not. If separable, the convolution is implemented as a depthwise convolution followed by a pointwise convolution.
     - The convolutional layer can be followed by a normalization layer (group or batch normalization) if specified.
-    - Activations are not included in this base class, and should be added as a separate layer if desired. ResNetBlocks implement an activation, and are composed of two ConvBase layers.
+    - Activations are not included in this base class, and should be added as a separate layer if desired. ResNetLayers implement an activation, and are composed of two ConvBase layers.
     """
 
     def __init__(self,
@@ -92,7 +92,7 @@ class ConvLayer(ConvBase):
             skip_x = self.skip_conv(skip_x)
         return x + skip_x
 
-class ConvUpsampleLayer(ConvBase):
+class UpsampleConvLayer(ConvBase):
     """
     A basic convolutional layer (1d, 2d, 3d) with upsampling.
     Include upsampling using a specified method (e.g., nearest, bilinear, trilinear) or transposed convolution.
@@ -121,13 +121,13 @@ class ConvUpsampleLayer(ConvBase):
             self.upsample = torch.nn.Upsample(scale_factor=self.upsample_factor, mode=upsample_method)
 
     def __str__(self):
-        return f"ConvUpsampleLayer{self.dim}d, in_channels={self.in_channels}, out_channels={self.out_channels}, kernel_size={self.conv.kernel_size}, upsample_method={self.upsample_method})"
+        return f"UpsampleConvLayer{self.dim}d, in_channels={self.in_channels}, out_channels={self.out_channels}, kernel_size={self.conv.kernel_size}, upsample_method={self.upsample_method})"
 
     def preprocess(self, x):
         x = self.upsample(x)
         return x
 
-class ConvDownsampleLayer(ConvBase):
+class DownsampleConvLayer(ConvBase):
     """
     A basic convolutional layer (1d, 2d, 3d) with an activation function and downsampling.
     Include downsampling using a specified method (e.g., max pooling, average pooling, strided).
@@ -153,7 +153,7 @@ class ConvDownsampleLayer(ConvBase):
             )(kernel_size=self.downsample_factor)
 
     def __str__(self):
-        return f"ConvDownsampleLayer{self.dim}d, in_channels={self.in_channels}, out_channels={self.out_channels}, kernel_size={self.conv.kernel_size}, downsample_method={self.downsample_method})"
+        return f"DownsampleConvLayer{self.dim}d, in_channels={self.in_channels}, out_channels={self.out_channels}, kernel_size={self.conv.kernel_size}, downsample_method={self.downsample_method})"
 
     def postprocess(self, x):
         if self.downsample_method != "strided":
