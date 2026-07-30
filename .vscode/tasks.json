@@ -17,6 +17,11 @@
             "label": "run detailed tests",
             "type": "shell",
             "command": "pixi run --environment test pytest -m detailed ./src/even_flow/tests"
+        },
+        {
+            "label": "run demos",
+            "type": "shell",
+            "command": "pixi run --environment test pytest -m demos ./src/even_flow/tests"
         }
     ]
 }

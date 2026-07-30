@@ -1,7 +1,7 @@
 import pytest
 import torch
 from even_flow.module.autoencoder.VariationalAutoencoder import ConvolutionalVariationalAutoencoder
-from even_flow.config.VariationalAutoencoderConfig import ConvolutionalVariationalAutoencoderConfig, ProbabilisticLayerConfig, DownsampleConvLayerConfig, UpsampleConvLayerConfig, ResNetLayerConfig, ConvLayerConfig, ActivationLayerConfig, PatchAttentionLayerConfig
+from even_flow.config import ConvolutionalVariationalAutoencoderConfig, ProbabilisticLayerConfig, DownsampleConvLayerConfig, UpsampleConvLayerConfig, ResNetLayerConfig, ConvLayerConfig, ActivationLayerConfig, PatchAttentionLayerConfig
 
 """
 Testing conv layers in 3D. The VariationalAutoencoder should be able to handle 3D inputs and outputs -e.g. time varying 2D reanalysis, or 3D reanalysis.
@@ -32,7 +32,7 @@ CONFIGS = [
         activation="GELU",
         norm="group"),
     
-    # test 3D convs with ResNetBlock layers
+    # test 3D convs with ResNetLayer layers
     ConvolutionalVariationalAutoencoderConfig(
         input_dim=(3, 8, 128, 128), # C, D, H, W
         encoder_layers=[

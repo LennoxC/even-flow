@@ -1,7 +1,7 @@
 import torch
-from even_flow.module.conv.ConvLayer import ConvLayer, ConvUpsampleLayer, ConvDownsampleLayer
+from even_flow.module.conv.ConvLayer import ConvLayer, UpsampleConvLayer, DownsampleConvLayer
 
-class ResNetBlock(torch.nn.Module):
+class ResNetLayer(torch.nn.Module):
     """
     A res-net inspired block. Uses two convolutional layers with a skip connection.
     - The number of channels may change, and if so a 1x1 convolution is used to match the number of channels for the skip connection.
@@ -32,11 +32,11 @@ class ResNetBlock(torch.nn.Module):
         self.sampling = sampling
 
         if sampling == "upsample":
-            self.conv1 = ConvUpsampleLayer(dim=dim, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
+            self.conv1 = UpsampleConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
             self.conv2 = ConvLayer(dim=dim, in_channels=out_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
             self.skip_conv = None # no skip connection for upsampling
         elif sampling == "downsample":
-            self.conv1 = ConvDownsampleLayer(dim=dim, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
+            self.conv1 = DownsampleConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
             self.conv2 = ConvLayer(dim=dim, in_channels=out_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
             self.skip_conv = None # no skip connection for downsampling
         else:

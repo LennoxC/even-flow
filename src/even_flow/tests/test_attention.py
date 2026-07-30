@@ -1,10 +1,10 @@
 import pytest
 import torch
 from even_flow.module.autoencoder.VariationalAutoencoder import ConvolutionalVariationalAutoencoder
-from even_flow.config.VariationalAutoencoderConfig import ConvolutionalVariationalAutoencoderConfig, ProbabilisticLayerConfig, DownsampleConvLayerConfig, UpsampleConvLayerConfig, ResNetLayerConfig, ConvLayerConfig, ActivationLayerConfig, PatchAttentionLayerConfig
+from even_flow.config import ConvolutionalVariationalAutoencoderConfig, ProbabilisticLayerConfig, DownsampleConvLayerConfig, UpsampleConvLayerConfig, ResNetLayerConfig, ConvLayerConfig, ActivationLayerConfig, PatchAttentionLayerConfig
 
 CONFIGS = [
-    # test ResNetBlock layers + a single PatchAttentionBlock layer in the encoder and decoder
+    # test ResNetLayer layers + a single PatchAttentionBlock layer in the encoder and decoder
     ConvolutionalVariationalAutoencoderConfig(
         input_dim=(3, 128, 128),
         encoder_layers=[
@@ -12,10 +12,12 @@ CONFIGS = [
             ResNetLayerConfig(dim=2, in_channels=16, out_channels=32, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="avg"),
             ResNetLayerConfig(dim=2, in_channels=32, out_channels=64, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="max"),
             PatchAttentionLayerConfig(dim=2, channels=64, num_heads=4, patch_size=4, norm="group", dropout=0.0),
+            ActivationLayerConfig(activation="ReLU"),
         ],
         probabilistic_layer=ProbabilisticLayerConfig(latent_dim=64, channels=64, dim=2, logvar_clamp=(-30.0, 30.0)),
         decoder_layers=[
             PatchAttentionLayerConfig(dim=2, channels=64, num_heads=4, patch_size=4, norm="group", dropout=0.0),
+            ActivationLayerConfig(activation="ReLU"),
             ResNetLayerConfig(dim=2, in_channels=64, out_channels=32, kernel_size=3, activation="GELU", sampling="upsample", upsample_method="nearest"),
             ResNetLayerConfig(dim=2, in_channels=32, out_channels=16, kernel_size=3, activation="GELU", sampling="upsample", upsample_method="bilinear"),
             ResNetLayerConfig(dim=2, in_channels=16, out_channels=3, kernel_size=3, activation="Sigmoid", sampling="upsample", upsample_method="nearest")
@@ -30,12 +32,16 @@ CONFIGS = [
             ResNetLayerConfig(dim=2, in_channels=16, out_channels=32, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="avg"),
             ResNetLayerConfig(dim=2, in_channels=32, out_channels=64, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="max"),
             PatchAttentionLayerConfig(dim=2, channels=64, num_heads=4, patch_size=4, norm="group", dropout=0.0),
+            ActivationLayerConfig(activation="ReLU"),
             PatchAttentionLayerConfig(dim=2, channels=64, num_heads=4, patch_size=8, norm="group", dropout=0.0),
+            ActivationLayerConfig(activation="ReLU"),
         ],
         probabilistic_layer=ProbabilisticLayerConfig(latent_dim=64, channels=64, dim=2, logvar_clamp=(-30.0, 30.0)),
         decoder_layers=[
             PatchAttentionLayerConfig(dim=2, channels=64, num_heads=4, patch_size=8, norm="group", dropout=0.0),
+            ActivationLayerConfig(activation="ReLU"),
             PatchAttentionLayerConfig(dim=2, channels=64, num_heads=4, patch_size=4, norm="group", dropout=0.0),
+            ActivationLayerConfig(activation="ReLU"),
             ResNetLayerConfig(dim=2, in_channels=64, out_channels=32, kernel_size=3, activation="GELU", sampling="upsample", upsample_method="nearest"),
             ResNetLayerConfig(dim=2, in_channels=32, out_channels=16, kernel_size=3, activation="GELU", sampling="upsample", upsample_method="bilinear"),
             ResNetLayerConfig(dim=2, in_channels=16, out_channels=3, kernel_size=3, activation="Sigmoid", sampling="upsample", upsample_method="nearest")
