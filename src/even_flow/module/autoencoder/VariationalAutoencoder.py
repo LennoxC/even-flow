@@ -31,6 +31,9 @@ class VariationalAutoencoderBase(torch.nn.Module):
         self.encoder = self.build_encoder()
         self.decoder = self.build_decoder()
 
+        if self.config.static_layers is not None:
+            self.static_encoder = self.build_static_encoder()
+
     @abstractmethod
     def build_encoder(self):
         pass
@@ -39,8 +42,18 @@ class VariationalAutoencoderBase(torch.nn.Module):
     def build_decoder(self):
         pass
 
+    @abstractmethod
+    def build_static_encoder(self):
+        pass
+
     def encode(self, x):
         return self.encoder(x)      # mean, log_var
+
+    def static_encode(self, x):
+        if self.config.static_layers is not None:
+            return self.static_encoder(x)
+        else:
+            return None
 
     def sample(self, mean, log_var):
         # when model.eval() is called, the model is in evaluation mode and we should return the mean of the latent space instead of sampling from it
@@ -54,14 +67,26 @@ class VariationalAutoencoderBase(torch.nn.Module):
     def count_trainable_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def decode(self, z):
-        return self.decoder(z)
+    def decode(self, z, static_skips=None):
+        return self.decoder(z, static_skips)
 
-    def forward(self, x):
+    def forward(self, x, static=None):
         mean, log_var = self.encode(x)
         z = self.sample(mean, log_var)
-        x_recon = self.decode(z)
+        if self.config.static_layers is not None and static is not None:
+            _, static_skips = self.static_encoder(static)
+            x_recon = self.decoder(z, static_skips)
+        else:
+            x_recon = self.decoder(z, static_skips=[])
         return x_recon, mean, log_var
+
+    def precompute_static_skips(self, static):
+        if self.config.static_layers is not None:
+            with torch.no_grad():
+                _, static_skips = self.static_encoder(static)
+                return static_skips
+        else:
+            raise ValueError("No static layers defined in the config. Cannot precompute static skips.")
 
     
 class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
@@ -91,9 +116,14 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
 
         return torch.nn.Sequential(*layers)
 
-    def build_decoder(self):
-        layers = []
+    def build_static_encoder(self):
+        layers, emit_flags = [], []
+        for layer_config in self.config.static_layers:
+            layers.append(self._build_layer(layer_config, self.config))
+            emit_flags.append(getattr(layer_config, 'emit_skip', False))
+        return StaticEncoder(layers, emit_flags)
 
+    def build_decoder(self):
         # if decoder layers are provided, use them. Otherwise, use the reverse of the encoder layers and convert to upsample layers
         configs = self.config.decoder_layers if self.config.decoder_layers is not None else reversed(self.config.encoder_layers)
         configs = [self._convert_to_decoder_layer(layer) for layer in configs] if self.config.decoder_layers is None else configs
@@ -103,12 +133,15 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
             channels=self.config.probabilistic_layer.channels,
             dim=self.config.probabilistic_layer.dim
         )
-        layers.append(probabilistic_decoder)
 
+        layers, receive_flags = [], []
+
+        layers.append(probabilistic_decoder)
+        receive_flags.append(False)
         for layer_config in configs:
             layers.append(self._build_layer(layer_config, self.config))
-        
-        return torch.nn.Sequential(*layers)
+            receive_flags.append(getattr(layer_config, 'receives_skip', False))
+        return Decoder(layers, receive_flags)
 
     def _build_layer(self, layer_config, config):
         """
@@ -135,7 +168,7 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
                 upsample_method=layer_config.upsample_method if hasattr(layer_config, 'upsample_method') else "nearest",
                 downsample_method=layer_config.downsample_method if hasattr(layer_config, 'downsample_method') else "strided",
                 activation=activation,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'sampling', 'sample_factor', 'upsample_method', 'downsample_method', 'activation']}
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'sampling', 'sample_factor', 'upsample_method', 'downsample_method', 'activation', 'emit_skip', 'receives_skip']}
             )
 
         if isinstance(layer_config, UpsampleConvLayerConfig):
@@ -148,7 +181,7 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
                 separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
                 upsample_method=layer_config.upsample_method if hasattr(layer_config, 'upsample_method') else "nearest",
                 sample_factor=layer_config.sample_factor if hasattr(layer_config, 'sample_factor') else 2,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'upsample_method', 'sample_factor']}
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'upsample_method', 'sample_factor', 'emit_skip', 'receives_skip']}
             )
 
         if isinstance(layer_config, DownsampleConvLayerConfig):
@@ -161,7 +194,7 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
                 separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
                 downsample_method=layer_config.downsample_method if hasattr(layer_config, 'downsample_method') else "strided",
                 sample_factor=layer_config.sample_factor if hasattr(layer_config, 'sample_factor') else 2,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'downsample_method', 'sample_factor']}
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'downsample_method', 'sample_factor', 'emit_skip', 'receives_skip']}
             )
 
         if isinstance(layer_config, ConvLayerConfig):
@@ -172,7 +205,7 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
                 kernel_size=layer_config.kernel_size if hasattr(layer_config, 'kernel_size') else 3,
                 norm=norm,
                 separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable']}
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'emit_skip', 'receives_skip']}
             )
 
         if isinstance(layer_config, PatchAttentionLayerConfig):
@@ -183,13 +216,12 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
                 patch_size=layer_config.patch_size if hasattr(layer_config, 'patch_size') else 1,
                 norm=layer_config.norm if hasattr(layer_config, 'norm') else "group",
                 dropout=layer_config.dropout if hasattr(layer_config, 'dropout') else 0.0,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'channels', 'num_heads', 'patch_size', 'norm', 'dropout']}
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'channels', 'num_heads', 'patch_size', 'norm', 'dropout', 'emit_skip', 'receives_skip']}
             )
 
         raise ValueError(f"Unknown layer config type: {layer_config}")
         return None
 
-    
     def _convert_to_decoder_layer(self, layer_config):
         """
         Convert an encoder layer config to a decoder layer config.
@@ -207,3 +239,35 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
         else:
             # skip other layer types (e.g., ActivationLayerConfig) as they don't need to be converted
             return layer_config
+
+class StaticEncoder(torch.nn.Module):
+    def __init__(self, layers: list[torch.nn.Module], emit_flags: list[bool]):
+        super().__init__()
+        self.layers = torch.nn.ModuleList(layers)
+        self.emit_flags = emit_flags
+
+    def forward(self, x):
+        skips = []
+        for layer, emit in zip(self.layers, self.emit_flags):
+            x = layer(x)
+            if emit:
+                skips.append(x)
+        return x, skips
+
+class Decoder(torch.nn.Module):
+    def __init__(self, layers: list[torch.nn.Module], receive_flags: list[bool]):
+        super().__init__()
+        self.layers = torch.nn.ModuleList(layers)
+        self.receive_flags = receive_flags
+
+    def forward(self, z, static_skips):
+        # static_skips arrives fine->coarse (from StaticEncoder).
+        # decoder runs coarse->fine, so consume in reverse order.
+        skip_stack = list(reversed(static_skips))
+        x = z
+        for layer, receives in zip(self.layers, self.receive_flags):
+            if receives:
+                skip = skip_stack.pop(0)
+                x = torch.cat([x, skip], dim=1)
+            x = layer(x)
+        return x
