@@ -14,7 +14,13 @@ This repository contains pytorch implementations of deep learning modules, used 
 
 ## Run Tests
 
-Running the tests is the easiest way to check that some basic models still compile and can do a forward pass. Note that pytest is only installed in the test pixi environment. This can also be run from the VSCode command pallet, as the `.vscode/tasks.json` has been included for your convenience. `cmd+shift+p` > `Tasks: Run Task` > `run pytest` > `Continue without scanning the task output`.
+Running the tests is the easiest way to check that some basic models still compile and can do a forward pass. Note that pytest is only installed in the test pixi environment. This can also be run from the VSCode command pallet, as the `.vscode/tasks.json` has been included for your convenience. `cmd+shift+p` > `Tasks: Run Task` > `run all tests` > `Continue without scanning the task output`.
+
+Tests are grouped:
+- fast
+- detailed
+
+You can alternatively choose to just run the fast tests, either with the -m flag, or selecting "run fast tests" from the vscode tasks. Some of the detailed tests require backprop which may not be feasible on slow computers. The fast tests still perform a forward pass.
 
 ```
 pixi run --environment test pytest ./src/even_flow/tests

@@ -4,8 +4,9 @@ from even_flow.config.VariationalAutoencoderConfig import VariationalAutoencoder
 from even_flow.module.conv.ConvLayer import ConvUpsampleLayer, ConvDownsampleLayer, ConvLayer
 from even_flow.module.activation.ActivationLayer import ActivationLayer
 from even_flow.module.conv.ResNetBlock import ResNetBlock
+from even_flow.module.patch_attention.PatchAttentionBlock import PatchAttentionLayer
 from even_flow.config.VariationalAutoencoderConfig import UpsampleConvLayerConfig
-from even_flow.config.VariationalAutoencoderConfig import DownsampleConvLayerConfig, ConvLayerConfig, UpsampleConvLayerConfig, ActivationLayerConfig
+from even_flow.config.VariationalAutoencoderConfig import DownsampleConvLayerConfig, ConvLayerConfig, UpsampleConvLayerConfig, ActivationLayerConfig, PatchAttentionLayerConfig
 from even_flow.module.vae.ProbabilisticLayer import ProbabilisticLatentEncoder, ProbabilisticLatentDecoder, reparameterize
 
 class VariationalAutoencoderBase(torch.nn.Module):
@@ -46,6 +47,12 @@ class VariationalAutoencoderBase(torch.nn.Module):
         if self.training:
             return reparameterize(mean, log_var)
         return mean
+
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters())
+
+    def count_trainable_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     def decode(self, z):
         return self.decoder(z)
@@ -166,6 +173,17 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
                 norm=norm,
                 separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
                 **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable']}
+            )
+
+        if isinstance(layer_config, PatchAttentionLayerConfig):
+            return PatchAttentionLayer(
+                dim=layer_config.dim,
+                channels=layer_config.channels,
+                num_heads=layer_config.num_heads if hasattr(layer_config, 'num_heads') else 4,
+                patch_size=layer_config.patch_size if hasattr(layer_config, 'patch_size') else 1,
+                norm=layer_config.norm if hasattr(layer_config, 'norm') else "group",
+                dropout=layer_config.dropout if hasattr(layer_config, 'dropout') else 0.0,
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'channels', 'num_heads', 'patch_size', 'norm', 'dropout']}
             )
 
         raise ValueError(f"Unknown layer config type: {layer_config}")

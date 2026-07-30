@@ -67,18 +67,22 @@ def model_and_input(request):
     x = torch.randn(1, *config.input_dim)
     return model, x
 
+@pytest.mark.fast
 def test_forward_shape(model_and_input):
     model, x = model_and_input
     recon, mean, log_var = model(x)
     assert recon.shape == x.shape
 
+@pytest.mark.detailed
 def test_gradients_flow(model_and_input):
     model, x = model_and_input
     recon, mean, log_var = model(x)
     (recon.sum() + mean.sum() + log_var.sum()).backward()
     for name, p in model.named_parameters():
-        assert p.grad is not None and not torch.all(p.grad == 0), name
+        assert p.grad is not None, f"{name} got no gradient at all (likely disconnected from graph)"
+        assert p.grad.abs().sum() > 0, f"{name} gradient is entirely zero across all elements"
 
+@pytest.mark.detailed
 def test_determinism(model_and_input):
     model, x = model_and_input
     model.eval()

@@ -4,9 +4,19 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "run pytest",
+            "label": "run all tests",
             "type": "shell",
             "command": "pixi run --environment test pytest ./src/even_flow/tests"
+        },
+        {
+            "label": "run fast tests",
+            "type": "shell",
+            "command": "pixi run --environment test pytest -m fast ./src/even_flow/tests"
+        },
+        {
+            "label": "run detailed tests",
+            "type": "shell",
+            "command": "pixi run --environment test pytest -m detailed ./src/even_flow/tests"
         }
     ]
 }
