@@ -1,6 +1,6 @@
 import torch
 from abc import ABC, abstractmethod
-from even_flow.config import VariationalAutoencoderConfig, ConvolutionalVariationalAutoencoderConfig, ResNetLayerConfig
+from even_flow.config import UNetConfig, ConvolutionalVariationalAutoencoderConfig, ResNetLayerConfig
 from even_flow.module.conv.ConvLayer import UpsampleConvLayer, DownsampleConvLayer, ConvLayer
 from even_flow.module.activation.ActivationLayer import ActivationLayer
 from even_flow.module.conv.ResNetLayer import ResNetLayer
