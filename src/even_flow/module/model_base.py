@@ -107,6 +107,14 @@ class UModelBase(ModelBase):
     def __init__(self):
         super().__init__()
 
+    @abstractmethod
+    def _build_encoder(self):
+        pass
+
+    @abstractmethod
+    def _build_decoder(self):
+        pass
+
     def calculate_latent_dimensionality(self):
         """
         Calculate the dimensionality of the latent space based on the encoder output.

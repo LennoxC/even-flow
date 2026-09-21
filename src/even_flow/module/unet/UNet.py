@@ -19,19 +19,14 @@ class UNetBase(UModelBase):
         self.encoder = self._build_encoder()
         self.decoder = self._build_decoder()
 
-    @abstractmethod
-    def _build_encoder(self):
-        pass
-
-    @abstractmethod
-    def _build_decoder(self):
-        pass
-
     def forward(self, x):
         # Implement the forward pass for the UNet model
         encoder_outputs = self.encoder(x)
         decoder_output = self.decoder(encoder_outputs)
         return decoder_output
+
+    # UModelBase handles the _build_encoder and _build_decoder methods, along with other utility functions.
+    # The _build_layer function is in the ModelBase class.
 
     def encode(self, x):
         return self.encoder(x)

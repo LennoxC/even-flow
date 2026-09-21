@@ -37,13 +37,8 @@ class VariationalAutoencoderBase(UModelBase):
         if self.config.static_layers is not None:
             self.static_encoder = self.build_static_encoder()
 
-    @abstractmethod
-    def build_encoder(self):
-        pass
-
-    @abstractmethod
-    def build_decoder(self):
-        pass
+    # UModelBase handles the _build_encoder and _build_decoder methods, along with other utility functions.
+    # The _build_layer function is in the ModelBase class.
 
     @abstractmethod
     def build_static_encoder(self):
