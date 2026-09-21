@@ -10,8 +10,9 @@ from even_flow.config import DownsampleConvLayerConfig, ConvLayerConfig, Upsampl
 from even_flow.module.vae.ProbabilisticLayer import ProbabilisticLatentEncoder, ProbabilisticLatentDecoder, reparameterize
 from even_flow.module.autoencoder.StaticEncoder import StaticEncoder
 from even_flow.module.autoencoder.Decoder import Decoder
+from even_flow.module.model_base import UModelBase
 
-class VariationalAutoencoderBase(torch.nn.Module):
+class VariationalAutoencoderBase(UModelBase):
     """
     A base Variational Autoencoder implementation.
     - Use VariationalAutoencoderConfig to configure the model. 
@@ -79,47 +80,6 @@ class VariationalAutoencoderBase(torch.nn.Module):
             raise ValueError("No static layers defined in the config. Cannot precompute static skips.")
 
     # ========== utility functions ==========
-
-    def count_parameters(self):
-        return sum(p.numel() for p in self.parameters())
-
-    def count_trainable_parameters(self):
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-    def calculate_latent_dimensionality(self):
-        """
-        Calculate the dimensionality of the latent space based on the encoder output.
-        This is useful for determining the size of the latent space for the flow model.
-        """
-        # create a dummy input tensor with the same shape as the input data
-        dummy_input = torch.randn(1, *self.config.input_dim)
-        mean, log_var = self.encode(dummy_input)
-        return torch.prod(torch.tensor(mean.shape[1:])).item()  # exclude batch dimension
-
-    def find_latent_dim_shape(self):
-        """
-        Find the shape of the latent space based on the encoder output.
-        This is useful for determining the shape of the latent space for the flow model.
-        """
-        # create a dummy input tensor with the same shape as the input data
-        dummy_input = torch.randn(1, *self.config.input_dim)
-        mean, log_var = self.encode(dummy_input)
-        return mean.shape[1:]  # exclude batch dimension
-
-    def calculate_input_dimensionality(self):
-        """
-        Calculate the number of elements in the input tensor based on the input dimensions specified in the config.
-        """
-        return torch.prod(torch.tensor(self.config.input_dim)).item()  # exclude batch dimension
-
-    def calculate_percentage_reduction(self):
-        """
-        Calculate the percentage reduction in dimensionality from the input to the latent space.
-        This is useful for determining how much information is being compressed by the encoder.
-        """
-        input_dimensionality = self.calculate_input_dimensionality()
-        latent_dimensionality = self.calculate_latent_dimensionality()
-        return (1 - (latent_dimensionality / input_dimensionality)) * 100
 
     def print_model_summary(self, verbose=False):
         """
@@ -200,10 +160,9 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
             emit_flags.append(getattr(layer_config, 'emit_skip', False))
         return StaticEncoder(layers, emit_flags)
 
+    """
     def _build_layer(self, layer_config, config):
-        """
         Converts from config files into actual layer objects.
-        """
 
         if isinstance(layer_config, ActivationLayerConfig):
             return ActivationLayer(activation=layer_config.activation)
@@ -280,12 +239,12 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
         return None
 
     def _convert_to_decoder_layer(self, layer_config):
-        """
+        
         Convert an encoder layer config to a decoder layer config.
         - For ConvLayerConfig, flip the in_channels and out_channels (handled by the convert_to_decoder_layer method).
         - For DownsampleConvLayerConfig, convert to UpsampleConvLayerConfig and flip the in_channels and out_channels (handled by the convert_to_decoder_layer method).
         - For ResNetLayerConfig, convert to the corresponding decoder layer config using the convert_to_decoder_layer method (handled by the convert_to_decoder_layer method).
-        """
+
         if isinstance(layer_config, ConvLayerConfig):
             return layer_config.convert_to_decoder_layer()
         elif isinstance(layer_config, DownsampleConvLayerConfig):
@@ -296,6 +255,8 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
         else:
             # skip other layer types (e.g., ActivationLayerConfig) as they don't need to be converted
             return layer_config
+
+    """
 
 
 

@@ -6,6 +6,7 @@ from .conv.ConvLayer import ConvBase, ConvLayer, UpsampleConvLayer, DownsampleCo
 from .conv.ResNetLayer import ResNetLayer
 from .patch_attention.PatchAttentionBlock import PatchAttentionLayer
 from .vae.ProbabilisticLayer import ProbabilisticLatentEncoder, ProbabilisticLatentDecoder
+from .model_base import ModelBase, UModelBase
 
 __all__ = [
     "Decoder",
@@ -20,5 +21,7 @@ __all__ = [
     "ResNetLayer",
     "PatchAttentionLayer",
     "ProbabilisticLatentEncoder",
-    "ProbabilisticLatentDecoder"
+    "ProbabilisticLatentDecoder",
+    "ModelBase",
+    "UModelBase",
 ]
