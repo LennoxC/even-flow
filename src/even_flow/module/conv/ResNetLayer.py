@@ -21,6 +21,8 @@ class ResNetLayer(torch.nn.Module):
                     upsample_method: str = "nearest",
                     downsample_method: str = "strided",
                     activation: str = "GELU",
+                    receives_skip: bool = False,
+                    emit_skip: bool = False,
                     **kwargs):
         super().__init__()
         self.dim = dim
@@ -30,6 +32,8 @@ class ResNetLayer(torch.nn.Module):
         self.activation = activation
         self.norm = norm
         self.sampling = sampling
+        self.receives_skip = receives_skip
+        self.emit_skip = emit_skip
 
         if sampling == "upsample":
             self.conv1 = UpsampleConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)

@@ -25,6 +25,7 @@ class ConvLayerConfig:
     norm: str = "group" # normalization method
     separable: bool = False # whether to use separable convolutions
     receives_skip: bool = False # whether to receive a skip connection from the encoder
+    emit_skip: bool = False # whether to emit a skip connection to the decoder
 
     def __post_init__(self):
         if self.separable and self.dim < 3:
@@ -37,13 +38,23 @@ class ConvLayerConfig:
         """
         Utility method to flip the in_channels and out_channels. This is useful for converting an encoder layer config to a decoder layer config.
         """
+        if (hasattr(self, 'receives_skip') and self.receives_skip) or (hasattr(self, 'emit_skip') and self.emit_skip):
+            # either receives_skip or emit_skip is True. Therefore flip these values
+            receives_skip = not self.receives_skip
+            emit_skip = not self.emit_skip
+        else:
+            receives_skip = False
+            emit_skip = False
+        
         return ConvLayerConfig(
             dim=self.dim,
             in_channels=self.out_channels,
             out_channels=self.in_channels,
             kernel_size=self.kernel_size,
             norm=self.norm,
-            separable=self.separable
+            separable=self.separable,
+            receives_skip=receives_skip,
+            emit_skip=emit_skip
         )
 
 @dataclass

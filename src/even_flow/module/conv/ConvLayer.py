@@ -22,6 +22,8 @@ class ConvBase(torch.nn.Module):
                  kernel_size: int = 3, 
                  norm: str = "group",
                  separable: bool = False,
+                 receives_skip: bool = False,
+                 emit_skip: bool = False,
                  **kwargs):
         super().__init__()
         self.dim = dim
@@ -29,6 +31,8 @@ class ConvBase(torch.nn.Module):
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.separable = separable
+        self.receives_skip = receives_skip
+        self.emit_skip = emit_skip
 
         # Set padding to maintain the same spatial dimensions after convolution by default. This can be overridden by specifying a different padding in kwargs.
         if not hasattr(self, 'padding'):

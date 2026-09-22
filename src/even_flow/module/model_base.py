@@ -45,6 +45,8 @@ class ModelBase(torch.nn.Module):
                 sample_factor=layer_config.sample_factor if hasattr(layer_config, 'sample_factor') else 2,
                 upsample_method=layer_config.upsample_method if hasattr(layer_config, 'upsample_method') else "nearest",
                 downsample_method=layer_config.downsample_method if hasattr(layer_config, 'downsample_method') else "strided",
+                receives_skip=layer_config.receives_skip if hasattr(layer_config, 'receives_skip') else False,
+                emit_skip=layer_config.emit_skip if hasattr(layer_config, 'emit_skip') else False,
                 activation=activation,
                 **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'sampling', 'sample_factor', 'upsample_method', 'downsample_method', 'activation', 'emit_skip', 'receives_skip']}
             )

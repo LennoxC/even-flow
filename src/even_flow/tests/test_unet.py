@@ -24,10 +24,44 @@ CONFIGS = [
             ActivationLayerConfig(activation="Sigmoid")
         ],
         activation="GELU",
-        norm="group")
+        norm="group"),
+
+    UNetConfig(
+            input_dim=(3, 128, 128),
+            encoder_layers=[
+                ResNetLayerConfig(dim=2, in_channels=3, out_channels=16, kernel_size=3, sampling="downsample", downsample_method="max", emit_skip=True),
+                ResNetLayerConfig(dim=2, in_channels=16, out_channels=32, kernel_size=3, sampling="downsample", downsample_method="max", emit_skip=True),
+                ResNetLayerConfig(dim=2, in_channels=32, out_channels=64, kernel_size=3, sampling="downsample", downsample_method="max", emit_skip=True)
+            ],
+            decoder_layers=[
+                ResNetLayerConfig(dim=2, in_channels=128, out_channels=32, kernel_size=3, sampling="upsample", upsample_method="nearest", receives_skip=True),
+                ResNetLayerConfig(dim=2, in_channels=64, out_channels=16, kernel_size=3, sampling="upsample", upsample_method="nearest", receives_skip=True),
+                ResNetLayerConfig(dim=2, in_channels=32, out_channels=3, kernel_size=3, sampling="upsample", upsample_method="nearest", receives_skip=True)
+            ],
+            activation="GELU",
+            norm="group"),
+
+    UNetConfig(
+            input_dim=(3, 128, 128),
+            encoder_layers=[
+                ResNetLayerConfig(dim=2, in_channels=3, out_channels=16, kernel_size=3, sampling="downsample", downsample_method="max", emit_skip=True),
+                ConvLayerConfig(dim=2, in_channels=16, out_channels=16, kernel_size=3),
+                ActivationLayerConfig(activation="ReLU"),
+                ResNetLayerConfig(dim=2, in_channels=16, out_channels=32, kernel_size=3, sampling="downsample", downsample_method="max", emit_skip=True),
+                ResNetLayerConfig(dim=2, in_channels=32, out_channels=64, kernel_size=3, sampling="downsample", downsample_method="max", emit_skip=True)
+            ],
+            decoder_layers=[
+                ResNetLayerConfig(dim=2, in_channels=128, out_channels=32, kernel_size=3, sampling="upsample", upsample_method="nearest", receives_skip=True),
+                ConvLayerConfig(dim=2, in_channels=32, out_channels=32, kernel_size=3),
+                ActivationLayerConfig(activation="ReLU"),
+                ResNetLayerConfig(dim=2, in_channels=64, out_channels=16, kernel_size=3, sampling="upsample", upsample_method="nearest", receives_skip=True),
+                ResNetLayerConfig(dim=2, in_channels=32, out_channels=3, kernel_size=3, sampling="upsample", upsample_method="nearest", receives_skip=True)
+            ],
+            activation="GELU",
+            norm="group")
 ]
 
-@pytest.fixture(params=CONFIGS, ids=["basic_unet"])
+@pytest.fixture(params=CONFIGS, ids=["basic_unet_no_skip", "resnet_unet", "resnet_conv_unet"])
 def model_and_input(request):
     config = request.param
     model = UNet(config)

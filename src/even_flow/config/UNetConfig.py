@@ -1,6 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 
+from even_flow.config import TimeEncoderConfig
+
 @dataclass(kw_only=True)
 class UNetConfig:
     """
@@ -13,12 +15,15 @@ class UNetConfig:
         decoder_layers: list[UpsampleConvLayerConfig | ConvLayerConfig | ResNetLayerConfig | ActivationLayerConfig | PatchAttentionLayerConfig] - a list of layer configurations for the decoder. If None, the decoder will be the reverse of the encoder with nearest upsampling.
         norm: str - the normalization method to use (e.g. "group", "batch", or None). This is the default normalization method to use if norm attributes are not specified in the layer configs (layer norms always override this default).
         activation: str - the activation function to use (e.g. "GELU", "ReLU", "SiLU", etc.).
+        time_encoding: TimeEncoderConfig - the configuration for the time encoding. This is required for FlowMatchingUNet and will raise an error if not provided.
     """
     input_dim: tuple[int, int, int] # input dims [channels, height, width]
     output_dim: tuple[int, int, int] = None # output dims [channels, height, width]. If None, output dims will be the same as input dims
 
     encoder_layers: list[DownsampleConvLayerConfig | ConvLayerConfig | ResNetLayerConfig | ActivationLayerConfig | PatchAttentionLayerConfig] # list of layer configurations
     decoder_layers: list[UpsampleConvLayerConfig | ConvLayerConfig | ResNetLayerConfig | ActivationLayerConfig | PatchAttentionLayerConfig] = None # list of layer configurations. If None, decoder will be the reverse of the encoder with nearest upsampling
+
+    time_encoding: TimeEncoderConfig = None # configuration for the time encoding (required for FlowMatchingUNet - will raise an error if not provided)
 
     norm: str = "group"
     activation: str = "GELU" # activation function
