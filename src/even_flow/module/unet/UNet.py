@@ -99,7 +99,9 @@ class FlowMatchingUNet(UNet):
         super().__init__(config)
         if hasattr(self.config, 'time_encoding'):
             # make one time encoding per decoder layer. Use the input channels of the decoder layer as the channel dimension for the time encoding projection.
-            self.time_encoders = torch.nn.ModuleList([self._make_time_encoding(self.config.time_encoding, layer_config.in_channels) for layer_config in self.config.decoder_layers])
+            convolutional_decoder_layers = [layer for layer in self.config.decoder_layers if hasattr(layer, 'in_channels')]
+            self.time_encoders = torch.nn.ModuleList([self._make_time_encoding(self.config.time_encoding, layer_config.in_channels) for layer_config in convolutional_decoder_layers])
+            # self.time_encoders = torch.nn.ModuleList([self._make_time_encoding(self.config.time_encoding, layer_config.in_channels) for layer_config in self.config.decoder_layers])
 
     def _make_time_encoding(self, time_encoding_config: TimeEncoderConfig, channel_dim: int = None):
         self.encoding_strategy = time_encoding_config.encoding_strategy
