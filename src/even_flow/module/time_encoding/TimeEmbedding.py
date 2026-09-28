@@ -1,5 +1,6 @@
 import torch
 from even_flow.config import TimeEncoderConfig
+import even_flow.module.time_encoding
 
 class TimeEmbedding(torch.nn.Module):
     def __init__(self, cfg: TimeEncoderConfig):
@@ -8,7 +9,7 @@ class TimeEmbedding(torch.nn.Module):
         encoding_cls = getattr(even_flow.module.time_encoding, f"{cfg.encoding_strategy}TimeEncoding")
         activation_cls = getattr(torch.nn, cfg.activation)
         self.encoding = encoding_cls(dim)
-        self.mlp = torch.nn.Sequential(nn.Linear(dim, dim), activation_cls(), nn.Linear(dim, dim))
+        self.mlp = torch.nn.Sequential(torch.nn.Linear(dim, dim), activation_cls(), torch.nn.Linear(dim, dim))
         self.out_dim = dim
 
     def forward(self, t: torch.Tensor):
