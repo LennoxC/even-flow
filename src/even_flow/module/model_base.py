@@ -7,6 +7,8 @@ from even_flow.module.conv.ResNetLayer import ResNetLayer
 from even_flow.module.patch_attention.PatchAttentionBlock import PatchAttentionLayer
 from even_flow.config import UpsampleConvLayerConfig
 from even_flow.config import DownsampleConvLayerConfig, ConvLayerConfig, UpsampleConvLayerConfig, ActivationLayerConfig, PatchAttentionLayerConfig
+from even_flow.config import DiTLayerConfig
+from even_flow.module.dit.DiTLayer import DiTLayer
 
 class ModelBase(torch.nn.Module):
     """
@@ -28,6 +30,22 @@ class ModelBase(torch.nn.Module):
 
         if isinstance(layer_config, ActivationLayerConfig):
             return ActivationLayer(activation=layer_config.activation)
+
+        if isinstance(layer_config, DiTLayerConfig):
+            cond_dim = None
+            if layer_config.time_conditioned:
+                cond_dim = layer_config.cond_dim
+                if cond_dim is None:
+                    cond_dim = getattr(getattr(self.config, "time_encoding", None), "time_encoding_dim", None)
+                if cond_dim is None:
+                    raise ValueError("DiTLayerConfig is time_conditioned but no cond_dim was given and the model "
+                                    "config has no time_encoding. Set time_conditioned=False for models without time.")
+            return DiTLayer(
+                dim=layer_config.dim, channels=layer_config.channels, hidden_size=layer_config.hidden_size,
+                depth=layer_config.depth, num_heads=layer_config.num_heads, patch_size=layer_config.patch_size,
+                mlp_ratio=layer_config.mlp_ratio, dropout=layer_config.dropout,
+                cond_dim=cond_dim, zero_init=layer_config.zero_init,
+            )
 
         # global vs layer specific activation and norm
         activation = layer_config.activation if isinstance(layer_config, ResNetLayerConfig) and layer_config.activation is not None else self.config.activation
