@@ -47,7 +47,8 @@ class ResNetLayer(torch.nn.Module):
             self.conv1 = ConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
             self.conv2 = ConvLayer(dim=dim, in_channels=out_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
             if in_channels != out_channels:
-                self.skip_conv = ConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels, kernel_size=1, **kwargs) # 1x1 convolution to match channels for skip connection
+                # ensure that the spatial dims remain the same too
+                self.skip_conv = ConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels, kernel_size=1, **kwargs) # 1x1 convolution to match channels for skip connection.
             else:
                 self.skip_conv = None
 
