@@ -76,7 +76,7 @@ class ConvBase(torch.nn.Module):
             return getattr(torch.nn, f"BatchNorm{dim}d")(channels)
         else:
             raise ValueError(f"Invalid normalization type: {norm}. Supported types are 'group' and 'batch'.")
-        return None
+        
 
 class ConvLayer(ConvBase):
     """
@@ -133,8 +133,7 @@ class UpsampleConvLayer(ConvBase):
         return f"UpsampleConvLayer{self.dim}d, in_channels={self.in_channels}, out_channels={self.out_channels}, kernel_size={self.conv.kernel_size}, upsample_method={self.upsample_method})"
 
     def preprocess(self, x):
-        x = self.upsample(x)
-        return x
+        return x if self.upsample_method == "transposed" else self.upsample(x)
 
 class DownsampleConvLayer(ConvBase):
     """
@@ -147,7 +146,7 @@ class DownsampleConvLayer(ConvBase):
         self.downsample_method = downsample_method
         self.downsample_factor = sample_factor
         if downsample_method != "strided":
-            self.downsample = (torch.nn.MaxPool if downsample_method == "max" else torch.nn.AvgPool)
+            self.downsample = (getattr(torch.nn, f"MaxPool{self.dim}d") if downsample_method == "max" else getattr(torch.nn, f"AvgPool{self.dim}d"))
             self.downsample = getattr(torch.nn, f"{'Max' if downsample_method=='max' else 'Avg'}Pool{self.dim}d")(kernel_size=sample_factor)
 
     def __str__(self):

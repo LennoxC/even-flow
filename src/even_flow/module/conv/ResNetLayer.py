@@ -36,21 +36,26 @@ class ResNetLayer(torch.nn.Module):
         self.emit_skip = emit_skip
 
         if sampling == "upsample":
-            self.conv1 = UpsampleConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
-            self.conv2 = ConvLayer(dim=dim, in_channels=out_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
-            self.skip_conv = None # no skip connection for upsampling
+            self.conv1 = UpsampleConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels,
+                                            kernel_size=kernel_size, norm=norm, separable=separable,
+                                            upsample_method=upsample_method, sample_factor=sample_factor, **kwargs)
+            self.conv2 = ConvLayer(dim=dim, in_channels=out_channels, out_channels=out_channels,
+                                    kernel_size=kernel_size, norm=norm, separable=separable, **kwargs)
+            self.skip_conv = None
         elif sampling == "downsample":
-            self.conv1 = DownsampleConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
-            self.conv2 = ConvLayer(dim=dim, in_channels=out_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
-            self.skip_conv = None # no skip connection for downsampling
+            self.conv1 = DownsampleConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels,
+                                                kernel_size=kernel_size, norm=norm, separable=separable,
+                                                downsample_method=downsample_method, sample_factor=sample_factor, **kwargs)
+            self.conv2 = ConvLayer(dim=dim, in_channels=out_channels, out_channels=out_channels,
+                                    kernel_size=kernel_size, norm=norm, separable=separable, **kwargs)
+            self.skip_conv = None
         else:
-            self.conv1 = ConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
-            self.conv2 = ConvLayer(dim=dim, in_channels=out_channels, out_channels=out_channels, kernel_size=kernel_size, norm=norm, **kwargs)
-            if in_channels != out_channels:
-                # ensure that the spatial dims remain the same too
-                self.skip_conv = ConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels, kernel_size=1, **kwargs) # 1x1 convolution to match channels for skip connection.
-            else:
-                self.skip_conv = None
+            self.conv1 = ConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels,
+                                    kernel_size=kernel_size, norm=norm, separable=separable, **kwargs)
+            self.conv2 = ConvLayer(dim=dim, in_channels=out_channels, out_channels=out_channels,
+                                    kernel_size=kernel_size, norm=norm, separable=separable, **kwargs)
+            self.skip_conv = (ConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels,
+                                        kernel_size=1, **kwargs) if in_channels != out_channels else None)
 
         self.activation = getattr(torch.nn, activation)()
 
