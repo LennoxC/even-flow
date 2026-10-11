@@ -2,11 +2,6 @@ import torch
 import torch.nn.functional as F
 from abc import ABC, abstractmethod
 
-# changes for dataclasses (WIP):
-# - norm is now a string instead of a boolean. Must be passed into the Conv layer.
-# - new variable: separable: bool = False
-# - activation is no longer passed into ConvBase
-
 class ConvBase(torch.nn.Module):
     """
     A base convolutional layer (1d, 2d, 3d).
@@ -17,7 +12,7 @@ class ConvBase(torch.nn.Module):
     """
 
     def __init__(self, dim, in_channels, out_channels, kernel_size=3, norm="group",
-                 separable=False, receives_skip=False, emit_skip=False,
+                 separable=False, receives_skip=False, emit_skip=False, no_skip=False,
                  stride: int = 1, pad_mode: str = "reflect", **kwargs):
         super().__init__()
         self.dim = dim
@@ -29,6 +24,7 @@ class ConvBase(torch.nn.Module):
         self.emit_skip = emit_skip
         self.stride = stride
         self.pad_mode = pad_mode
+        self.no_skip = no_skip
  
         # "same"-style padding: total = k - stride, split asymmetrically if odd.
         total = kernel_size - stride
@@ -47,7 +43,7 @@ class ConvBase(torch.nn.Module):
         else:
             self.conv = Conv(in_channels, out_channels, kernel_size, stride=stride,
                              padding=0, **kwargs)
- 
+
         self.norm = self._norm(norm, out_channels, dim)
 
     def forward(self, x):
@@ -55,7 +51,9 @@ class ConvBase(torch.nn.Module):
         if any(self.pad_tuple):
             x = F.pad(x, self.pad_tuple, mode=self.pad_mode)
         x = self.conv(x)
-        x = self.normalize(x)
+        if self.norm is not None:
+            x = self.norm(x)
+        
         return self.postprocess(x)
 
     def preprocess(self, x):
@@ -74,6 +72,8 @@ class ConvBase(torch.nn.Module):
             return torch.nn.GroupNorm(1, channels)
         if norm == "batch":
             return getattr(torch.nn, f"BatchNorm{dim}d")(channels)
+        if norm == "None":
+            return None
         else:
             raise ValueError(f"Invalid normalization type: {norm}. Supported types are 'group' and 'batch'.")
         
@@ -86,7 +86,7 @@ class ConvLayer(ConvBase):
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if self.in_channels != self.out_channels:
+        if self.in_channels != self.out_channels and not self.no_skip:
             self.skip_conv = getattr(torch.nn, f"Conv{self.dim}d")(self.in_channels, self.out_channels, kernel_size=1)
         else:
             self.skip_conv = None
@@ -97,7 +97,11 @@ class ConvLayer(ConvBase):
         x = super().forward(x)
         if self.skip_conv is not None:
             skip_x = self.skip_conv(skip_x)
-        return x + skip_x
+        
+        if self.no_skip:
+            return x
+        else:
+            return x + skip_x
 
 class UpsampleConvLayer(ConvBase):
     """

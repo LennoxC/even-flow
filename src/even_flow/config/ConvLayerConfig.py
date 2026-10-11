@@ -26,6 +26,7 @@ class ConvLayerConfig:
     separable: bool = False # whether to use separable convolutions
     receives_skip: bool = False # whether to receive a skip connection from the encoder
     emit_skip: bool = False # whether to emit a skip connection to the decoder
+    no_skip: bool = False # whether to disable skip connections for this layer. This is used in the encoder to determine which layers should not emit skip connections to the decoder. If True, the output of this layer will not be passed to the decoder as a skip connection.
 
     def __post_init__(self):
         if self.separable and self.dim < 3:
