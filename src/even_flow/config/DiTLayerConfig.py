@@ -17,6 +17,9 @@ class DiTLayerConfig:
     time_conditioned: bool = True           # False for models without time (plain UNet, VAE)
     cond_dim: Optional[int] = None          # None -> taken from model_config.time_encoding.time_encoding_dim
     zero_init: bool = True                  # adaLN-Zero: layer is exactly the identity at init
+    pos_embed: str = "sincos"
+    pos_max_period: float = 10000.0
+    rope_theta: float = 100.0
 
     def convert_to_decoder_layer(self):
         # shape-preserving and symmetric, so the decoder copy is identical

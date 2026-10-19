@@ -9,8 +9,15 @@ into the middle of a UNet without changing any channel counts.
 Time conditioning follows the same contract as TimeInjection: it consumes the (B, cond_dim)
 embedding produced by TimeEmbedding. Layers with `takes_time_emb = True` are called as
 `layer(x, emb)` by the UNet runners instead of `layer(x)`.
+
+CHANGES vs previous version (all opt-in; defaults reproduce the old computation exactly and add
+no parameters, so existing checkpoints / the pretrained VAE load unchanged):
+  * pos_embed: "sincos" (legacy, default) | "rope" | "sincos+rope"
+  * pos_max_period: max period of the additive sin-cos embedding (legacy 10000 is far too long for
+    an 8x8 / 4x4 token grid; something near the grid size, e.g. 16, uses all channels).
+  * rope_theta: base of the axial rotary embedding applied to q/k in *every* attention block.
 """
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -18,6 +25,7 @@ import torch.nn.functional as F
 
 _CONV = {1: nn.Conv1d, 2: nn.Conv2d, 3: nn.Conv3d}
 _CONV_T = {1: nn.ConvTranspose1d, 2: nn.ConvTranspose2d, 3: nn.ConvTranspose3d}
+_POS_MODES = ("sincos", "rope", "sincos+rope")
 
 
 def _modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
@@ -25,15 +33,17 @@ def _modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor) -> torc
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
 
-def _axis_sincos(n: int, d: int, device) -> torch.Tensor:
+# --------------------------------------------------------------------------- positional encodings
+def _axis_sincos(n: int, d: int, device, max_period: float = 10000.0) -> torch.Tensor:
     """Fixed 1D sin-cos embedding, (n, d). d must be even."""
     pos = torch.arange(n, device=device, dtype=torch.float32)
-    omega = 1.0 / (10000 ** (torch.arange(d // 2, device=device, dtype=torch.float32) / (d // 2)))
+    omega = 1.0 / (max_period ** (torch.arange(d // 2, device=device, dtype=torch.float32) / (d // 2)))
     angles = pos[:, None] * omega[None, :]
     return torch.cat([angles.sin(), angles.cos()], dim=1)
 
 
-def sincos_pos_embed(hidden_size: int, grid, device=None, dtype=torch.float32) -> torch.Tensor:
+def sincos_pos_embed(hidden_size: int, grid, device=None, dtype=torch.float32,
+                     max_period: float = 10000.0) -> torch.Tensor:
     """
     Fixed N-D sin-cos positional embedding for a token grid, returned as (prod(grid), hidden_size).
     The channels are split evenly across the spatial axes; any remainder is zero padded, so
@@ -46,13 +56,41 @@ def sincos_pos_embed(hidden_size: int, grid, device=None, dtype=torch.float32) -
     if d < 2:
         raise ValueError(f"hidden_size={hidden_size} is too small for a {ndim}D positional embedding.")
     index = torch.meshgrid(*[torch.arange(n, device=device) for n in grid], indexing="ij")
-    parts = [_axis_sincos(n, d, device)[idx.reshape(-1)] for n, idx in zip(grid, index)]
+    parts = [_axis_sincos(n, d, device, max_period)[idx.reshape(-1)] for n, idx in zip(grid, index)]
     emb = torch.cat(parts, dim=1)
     if emb.shape[1] < hidden_size:
         emb = F.pad(emb, (0, hidden_size - emb.shape[1]))
     return emb.to(dtype)
 
 
+def rope_nd(head_dim: int, grid, device=None, theta: float = 100.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Axial N-D rotary embedding tables. Returns (cos, sin), each (N, R), where N = prod(grid) and
+    R = ndim * d_axis / 2. The head dim is split evenly across the spatial axes; any remainder
+    channels are left unrotated. Relative offsets, not absolute indices, enter the attention logits.
+    """
+    grid = tuple(int(g) for g in grid)
+    ndim = len(grid)
+    d_axis = 2 * (head_dim // (2 * ndim))
+    if d_axis < 2:
+        raise ValueError(f"head_dim={head_dim} is too small for {ndim}D rotary embeddings "
+                         f"(need head_dim >= {2 * ndim}). Use fewer heads or a larger hidden_size.")
+    index = torch.meshgrid(*[torch.arange(n, device=device) for n in grid], indexing="ij")
+    freqs = theta ** (-torch.arange(d_axis // 2, device=device, dtype=torch.float32) / (d_axis // 2))
+    angles = torch.cat([idx.reshape(-1).float()[:, None] * freqs[None, :] for idx in index], dim=1)
+    return angles.cos(), angles.sin()
+
+
+def apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
+    """x: (B, H, N, head_dim); cos/sin: (N, R). Rotates the first 2R channels, pairing (i, i+R)."""
+    r = cos.shape[-1]
+    x1, x2, rest = x[..., :r], x[..., r:2 * r], x[..., 2 * r:]
+    cos, sin = cos.to(x.dtype), sin.to(x.dtype)
+    out = torch.cat([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1)
+    return torch.cat([out, rest], dim=-1) if rest.shape[-1] > 0 else out
+
+
+# --------------------------------------------------------------------------- transformer pieces
 class _SelfAttention(nn.Module):
     def __init__(self, hidden_size: int, num_heads: int, dropout: float):
         super().__init__()
@@ -63,9 +101,12 @@ class _SelfAttention(nn.Module):
         self.qkv = nn.Linear(hidden_size, 3 * hidden_size)
         self.proj = nn.Linear(hidden_size, hidden_size)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, rope: Optional[Tuple[torch.Tensor, torch.Tensor]] = None) -> torch.Tensor:
         B, N, D = x.shape
         q, k, v = self.qkv(x).reshape(B, N, 3, self.num_heads, D // self.num_heads).permute(2, 0, 3, 1, 4)
+        if rope is not None:
+            q = apply_rope(q, *rope)
+            k = apply_rope(k, *rope)
         out = F.scaled_dot_product_attention(q, k, v, dropout_p=self.dropout if self.training else 0.0)
         return self.proj(out.transpose(1, 2).reshape(B, N, D))
 
@@ -94,12 +135,12 @@ class DiTBlock(nn.Module):
             nn.Sequential(nn.SiLU(), nn.Linear(cond_dim, 6 * hidden_size)) if cond_dim is not None else None
         )
 
-    def forward(self, x: torch.Tensor, emb: Optional[torch.Tensor]) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, emb: Optional[torch.Tensor], rope=None) -> torch.Tensor:
         if self.adaLN is None:
-            x = x + self.attn(self.norm1(x))
+            x = x + self.attn(self.norm1(x), rope)
             return x + self.mlp(self.norm2(x))
         shift1, scale1, gate1, shift2, scale2, gate2 = self.adaLN(emb).chunk(6, dim=-1)
-        x = x + gate1.unsqueeze(1) * self.attn(_modulate(self.norm1(x), shift1, scale1))
+        x = x + gate1.unsqueeze(1) * self.attn(_modulate(self.norm1(x), shift1, scale1), rope)
         x = x + gate2.unsqueeze(1) * self.mlp(_modulate(self.norm2(x), shift2, scale2))
         return x
 
@@ -119,6 +160,10 @@ class DiTLayer(nn.Module):
             (usable in models without time, e.g. a VAE).
         zero_init: zero-initialise the adaLN modulation and the output projection (adaLN-Zero),
             so the layer is exactly the identity at initialisation.
+        pos_embed: "sincos" (legacy additive embedding, default), "rope" (axial rotary embedding in
+            every attention block, no additive embedding) or "sincos+rope".
+        pos_max_period: max period of the additive sin-cos embedding (legacy default 10000).
+        rope_theta: base frequency of the rotary embedding.
     """
     takes_time_emb = True  # UNet runners call layer(x, emb) for layers with this flag
 
@@ -134,20 +179,31 @@ class DiTLayer(nn.Module):
         dropout: float = 0.0,
         cond_dim: Optional[int] = None,
         zero_init: bool = True,
+        pos_embed: str = "sincos",
+        pos_max_period: float = 10000.0,
+        rope_theta: float = 100.0,
     ):
         super().__init__()
         if dim not in _CONV:
             raise ValueError(f"dim must be 1, 2 or 3, got {dim}.")
+        if pos_embed not in _POS_MODES:
+            raise ValueError(f"pos_embed must be one of {_POS_MODES}, got {pos_embed!r}.")
         hidden_size = hidden_size or channels
+        if "rope" in pos_embed and (hidden_size // num_heads) < 2 * dim:
+            raise ValueError(f"head_dim={hidden_size // num_heads} is too small for {dim}D rotary embeddings.")
 
         # NOTE: deliberately `channels`, not `in_channels`: FlowMatchingUNet adds a TimeInjection to
         # every decoder layer that has `in_channels`, and this layer does its own time conditioning.
         self.dim = dim
         self.channels = channels
         self.hidden_size = hidden_size
+        self.num_heads = num_heads
         self.patch_size = patch_size
         self.cond_dim = cond_dim
         self.requires_emb = cond_dim is not None
+        self.pos_embed = pos_embed
+        self.pos_max_period = pos_max_period
+        self.rope_theta = rope_theta
 
         self.patch_embed = _CONV[dim](channels, hidden_size, kernel_size=patch_size, stride=patch_size)
         self.blocks = nn.ModuleList(
@@ -201,10 +257,16 @@ class DiTLayer(nn.Module):
         tokens = self.patch_embed(x)  # (B, D, *grid)
         grid = tokens.shape[2:]
         tokens = tokens.flatten(2).transpose(1, 2)  # (B, N, D)
-        tokens = tokens + sincos_pos_embed(self.hidden_size, grid, tokens.device, tokens.dtype)
+
+        if self.pos_embed in ("sincos", "sincos+rope"):
+            tokens = tokens + sincos_pos_embed(self.hidden_size, grid, tokens.device, tokens.dtype,
+                                               max_period=self.pos_max_period)
+        rope = None
+        if self.pos_embed in ("rope", "sincos+rope"):
+            rope = rope_nd(self.hidden_size // self.num_heads, grid, tokens.device, self.rope_theta)
 
         for block in self.blocks:
-            tokens = block(tokens, emb)
+            tokens = block(tokens, emb, rope)
 
         if self.final_adaLN is not None:
             shift, scale = self.final_adaLN(emb).chunk(2, dim=-1)

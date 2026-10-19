@@ -45,6 +45,9 @@ class ModelBase(torch.nn.Module):
                 depth=layer_config.depth, num_heads=layer_config.num_heads, patch_size=layer_config.patch_size,
                 mlp_ratio=layer_config.mlp_ratio, dropout=layer_config.dropout,
                 cond_dim=cond_dim, zero_init=layer_config.zero_init,
+                pos_embed=getattr(layer_config, "pos_embed", "sincos"),
+                pos_max_period=getattr(layer_config, "pos_max_period", 10000.0),
+                rope_theta=getattr(layer_config, "rope_theta", 100.0)
             )
 
         # global vs layer specific activation and norm
@@ -52,6 +55,12 @@ class ModelBase(torch.nn.Module):
         norm = layer_config.norm if layer_config.norm is not None else self.config.norm
 
         if isinstance(layer_config, ResNetLayerConfig):
+            res_cond_dim = None
+            if getattr(layer_config, "time_conditioned", False):
+                res_cond_dim = getattr(layer_config, "cond_dim", None) or getattr(
+                    getattr(self.config, "time_encoding", None), "time_encoding_dim", None)
+                if res_cond_dim is None:
+                    raise ValueError("ResNetLayerConfig.time_conditioned needs cond_dim or config.time_encoding.")
             return ResNetLayer(
                 dim=layer_config.dim,
                 in_channels=layer_config.in_channels,
@@ -66,7 +75,11 @@ class ModelBase(torch.nn.Module):
                 receives_skip=layer_config.receives_skip if hasattr(layer_config, 'receives_skip') else False,
                 emit_skip=layer_config.emit_skip if hasattr(layer_config, 'emit_skip') else False,
                 activation=activation,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'sampling', 'sample_factor', 'upsample_method', 'downsample_method', 'activation', 'emit_skip', 'receives_skip']}
+                cond_dim=res_cond_dim,
+                **{k: v for k, v in layer_config.__dict__.items()
+                if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'sampling',
+                                'sample_factor', 'upsample_method', 'downsample_method', 'activation',
+                                'emit_skip', 'receives_skip', 'time_conditioned', 'cond_dim']}
             )
 
         if isinstance(layer_config, UpsampleConvLayerConfig):

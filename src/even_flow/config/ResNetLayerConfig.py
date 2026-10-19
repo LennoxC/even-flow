@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import Optional
 
 @dataclass
 class ResNetLayerConfig:
@@ -42,6 +43,8 @@ class ResNetLayerConfig:
     activation: str = "GELU"
     emit_skip: bool = False # whether to emit a skip connection from this layer to the decoder
     receives_skip: bool = False # whether to receive a skip connection from the encoder
+    time_conditioned: bool = False
+    cond_dim: Optional[int] = None
 
     def convert_to_decoder_layer(self):
         """

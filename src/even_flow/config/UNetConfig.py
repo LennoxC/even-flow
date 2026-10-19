@@ -28,3 +28,5 @@ class UNetConfig:
     norm: str = "group"
     activation: str = "GELU" # activation function
 
+    static_channels: int = 0
+

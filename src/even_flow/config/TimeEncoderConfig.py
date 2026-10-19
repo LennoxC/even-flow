@@ -14,3 +14,4 @@ class TimeEncoderConfig:
     encoding_strategy: str = "Sinusoidal" # the strategy for encoding time (currently only supports "sinusoidal")
     time_encoding_dim: int = 64
     activation: str = "GELU"
+    time_scale: float = 1.0
