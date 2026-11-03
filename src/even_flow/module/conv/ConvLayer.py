@@ -48,13 +48,17 @@ class ConvBase(torch.nn.Module):
 
     def forward(self, x):
         x = self.preprocess(x)
-        if any(self.pad_tuple):
-            x = F.pad(x, self.pad_tuple, mode=self.pad_mode)
+        x = self.pad(x)
         x = self.conv(x)
         if self.norm is not None:
             x = self.norm(x)
         
         return self.postprocess(x)
+
+    def pad(self, x):
+        if any(self.pad_tuple):
+            x = F.pad(x, self.pad_tuple, mode=self.pad_mode)
+        return x
 
     def preprocess(self, x):
         return x

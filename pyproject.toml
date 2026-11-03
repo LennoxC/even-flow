@@ -48,5 +48,6 @@ pyyaml = ">=6.0.3,<7"
 markers = [
     "fast: marks tests as fast",
     "detailed: thorough testing including gradients and determinism",
-    "demos: demonstration models in the even_flow/demos/ folder"
+    "demos: demonstration models in the even_flow/demos/ folder",
+    "layer: specific tests on layers"
 ]

@@ -115,7 +115,7 @@ class UNet(UNetBase):
         layers = []
 
         for layer_config in self.config.encoder_layers:
-            layers.append(self._build_layer(layer_config, self.config))
+            layers.append(self._build_layer(layer_config))
 
         return torch.nn.Sequential(*layers)
 
@@ -126,7 +126,7 @@ class UNet(UNetBase):
         layers = []
 
         for layer_config in configs:
-            layers.append(self._build_layer(layer_config, self.config))
+            layers.append(self._build_layer(layer_config))
 
         return torch.nn.Sequential(*layers)
 

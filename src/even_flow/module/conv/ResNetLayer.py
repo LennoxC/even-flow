@@ -11,8 +11,6 @@ class ResNetLayer(torch.nn.Module):
     - No skip connection is used if upsampling or downsampling is used.
     - The activation function is applied after the first convolutional layer.
     - Additional kwargs are passed to the ConvLayer.
-
-    NEW (opt-in):
     - cond_dim: if set, the block applies FiLM (scale, shift) from the time embedding after conv1,
       zero-initialised so it starts as a no-op. The layer then has `takes_time_emb = True`, so the
       UNet runners call layer(x, emb), including in the ENCODER (which previously never saw time),
@@ -37,6 +35,7 @@ class ResNetLayer(torch.nn.Module):
                     receives_skip: bool = False,
                     emit_skip: bool = False,
                     cond_dim: Optional[int] = None,
+                    pad_mode: str = "reflect",
                     **kwargs):
         super().__init__()
         self.dim = dim
@@ -50,26 +49,27 @@ class ResNetLayer(torch.nn.Module):
         self.emit_skip = emit_skip
         self.cond_dim = cond_dim
         self.takes_time_emb = cond_dim is not None
+        self.pad_mode = pad_mode
 
         if sampling == "upsample":
             self.conv1 = UpsampleConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels,
                                             kernel_size=kernel_size, norm=norm, separable=separable,
-                                            upsample_method=upsample_method, sample_factor=sample_factor, **kwargs)
+                                            upsample_method=upsample_method, sample_factor=sample_factor, pad_mode=pad_mode, **kwargs)
             self.conv2 = ConvLayer(dim=dim, in_channels=out_channels, out_channels=out_channels,
-                                    kernel_size=kernel_size, norm=norm, separable=separable, **kwargs)
+                                    kernel_size=kernel_size, norm=norm, separable=separable, pad_mode=pad_mode, **kwargs)
             self.skip_conv = None
         elif sampling == "downsample":
             self.conv1 = DownsampleConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels,
                                                 kernel_size=kernel_size, norm=norm, separable=separable,
-                                                downsample_method=downsample_method, sample_factor=sample_factor, **kwargs)
+                                                downsample_method=downsample_method, sample_factor=sample_factor, pad_mode=pad_mode, **kwargs)
             self.conv2 = ConvLayer(dim=dim, in_channels=out_channels, out_channels=out_channels,
-                                    kernel_size=kernel_size, norm=norm, separable=separable, **kwargs)
+                                    kernel_size=kernel_size, norm=norm, separable=separable, pad_mode=pad_mode, **kwargs)
             self.skip_conv = None
         else:
             self.conv1 = ConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels,
-                                    kernel_size=kernel_size, norm=norm, separable=separable, **kwargs)
+                                    kernel_size=kernel_size, norm=norm, separable=separable, pad_mode=pad_mode, **kwargs)
             self.conv2 = ConvLayer(dim=dim, in_channels=out_channels, out_channels=out_channels,
-                                    kernel_size=kernel_size, norm=norm, separable=separable, **kwargs)
+                                    kernel_size=kernel_size, norm=norm, separable=separable, pad_mode=pad_mode, **kwargs)
             self.skip_conv = (ConvLayer(dim=dim, in_channels=in_channels, out_channels=out_channels,
                                         kernel_size=1, **kwargs) if in_channels != out_channels else None)
 

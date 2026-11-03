@@ -116,7 +116,7 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
     def build_encoder(self):
         layers = []
         for layer_config in self.config.encoder_layers:
-            layers.append(self._build_layer(layer_config, self.config))
+            layers.append(self._build_layer(layer_config))
 
         probabilistic_encoder = ProbabilisticLatentEncoder(
             latent_dim=self.config.probabilistic_layer.latent_dim,
@@ -144,114 +144,13 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
         layers.append(probabilistic_decoder)
         receive_flags.append(False)
         for layer_config in configs:
-            layers.append(self._build_layer(layer_config, self.config))
+            layers.append(self._build_layer(layer_config))
             receive_flags.append(getattr(layer_config, 'receives_skip', False))
         return Decoder(layers, receive_flags)
 
     def build_static_encoder(self):
         layers, emit_flags = [], []
         for layer_config in self.config.static_layers:
-            layers.append(self._build_layer(layer_config, self.config))
+            layers.append(self._build_layer(layer_config))
             emit_flags.append(getattr(layer_config, 'emit_skip', False))
         return StaticEncoder(layers, emit_flags)
-
-    """
-    def _build_layer(self, layer_config, config):
-        Converts from config files into actual layer objects.
-
-        if isinstance(layer_config, ActivationLayerConfig):
-            return ActivationLayer(activation=layer_config.activation)
-
-        # global vs layer specific activation and norm
-        activation = layer_config.activation if isinstance(layer_config, ResNetLayerConfig) and layer_config.activation is not None else self.config.activation
-        norm = layer_config.norm if layer_config.norm is not None else self.config.norm
-
-        if isinstance(layer_config, ResNetLayerConfig):
-            return ResNetLayer(
-                dim=layer_config.dim,
-                in_channels=layer_config.in_channels,
-                out_channels=layer_config.out_channels,
-                kernel_size=layer_config.kernel_size if hasattr(layer_config, 'kernel_size') else 3,
-                norm=norm,
-                separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
-                sampling=layer_config.sampling if hasattr(layer_config, 'sampling') else None,
-                sample_factor=layer_config.sample_factor if hasattr(layer_config, 'sample_factor') else 2,
-                upsample_method=layer_config.upsample_method if hasattr(layer_config, 'upsample_method') else "nearest",
-                downsample_method=layer_config.downsample_method if hasattr(layer_config, 'downsample_method') else "strided",
-                activation=activation,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'sampling', 'sample_factor', 'upsample_method', 'downsample_method', 'activation', 'emit_skip', 'receives_skip']}
-            )
-
-        if isinstance(layer_config, UpsampleConvLayerConfig):
-            return UpsampleConvLayer(
-                dim=layer_config.dim,
-                in_channels=layer_config.in_channels,
-                out_channels=layer_config.out_channels,
-                kernel_size=layer_config.kernel_size if hasattr(layer_config, 'kernel_size') else 3,
-                norm=norm,
-                separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
-                upsample_method=layer_config.upsample_method if hasattr(layer_config, 'upsample_method') else "nearest",
-                sample_factor=layer_config.sample_factor if hasattr(layer_config, 'sample_factor') else 2,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'upsample_method', 'sample_factor', 'emit_skip', 'receives_skip']}
-            )
-
-        if isinstance(layer_config, DownsampleConvLayerConfig):
-            return DownsampleConvLayer(
-                dim=layer_config.dim,
-                in_channels=layer_config.in_channels,
-                out_channels=layer_config.out_channels,
-                kernel_size=layer_config.kernel_size if hasattr(layer_config, 'kernel_size') else 3,
-                norm=norm,
-                separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
-                downsample_method=layer_config.downsample_method if hasattr(layer_config, 'downsample_method') else "strided",
-                sample_factor=layer_config.sample_factor if hasattr(layer_config, 'sample_factor') else 2,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'downsample_method', 'sample_factor', 'emit_skip', 'receives_skip']}
-            )
-
-        if isinstance(layer_config, ConvLayerConfig):
-            return ConvLayer(
-                dim=layer_config.dim,
-                in_channels=layer_config.in_channels,
-                out_channels=layer_config.out_channels,
-                kernel_size=layer_config.kernel_size if hasattr(layer_config, 'kernel_size') else 3,
-                norm=norm,
-                separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'emit_skip', 'receives_skip']}
-            )
-
-        if isinstance(layer_config, PatchAttentionLayerConfig):
-            return PatchAttentionLayer(
-                dim=layer_config.dim,
-                channels=layer_config.channels,
-                num_heads=layer_config.num_heads if hasattr(layer_config, 'num_heads') else 4,
-                patch_size=layer_config.patch_size if hasattr(layer_config, 'patch_size') else 1,
-                norm=layer_config.norm if hasattr(layer_config, 'norm') else "group",
-                dropout=layer_config.dropout if hasattr(layer_config, 'dropout') else 0.0,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'channels', 'num_heads', 'patch_size', 'norm', 'dropout', 'emit_skip', 'receives_skip']}
-            )
-
-        raise ValueError(f"Unknown layer config type: {layer_config}")
-        return None
-
-    def _convert_to_decoder_layer(self, layer_config):
-        
-        Convert an encoder layer config to a decoder layer config.
-        - For ConvLayerConfig, flip the in_channels and out_channels (handled by the convert_to_decoder_layer method).
-        - For DownsampleConvLayerConfig, convert to UpsampleConvLayerConfig and flip the in_channels and out_channels (handled by the convert_to_decoder_layer method).
-        - For ResNetLayerConfig, convert to the corresponding decoder layer config using the convert_to_decoder_layer method (handled by the convert_to_decoder_layer method).
-
-        if isinstance(layer_config, ConvLayerConfig):
-            return layer_config.convert_to_decoder_layer()
-        elif isinstance(layer_config, DownsampleConvLayerConfig):
-            return layer_config.convert_to_decoder_layer()
-        elif isinstance(layer_config, ResNetLayerConfig):
-            return layer_config.convert_to_decoder_layer()
-
-        else:
-            # skip other layer types (e.g., ActivationLayerConfig) as they don't need to be converted
-            return layer_config
-
-    """
-
-
-

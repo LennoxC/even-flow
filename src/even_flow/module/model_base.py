@@ -23,7 +23,7 @@ class ModelBase(torch.nn.Module):
     def count_trainable_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def _build_layer(self, layer_config, config):
+    def _build_layer(self, layer_config):
         """
         Converts from config files into actual layer objects.
         """
@@ -51,8 +51,21 @@ class ModelBase(torch.nn.Module):
             )
 
         # global vs layer specific activation and norm
-        activation = layer_config.activation if isinstance(layer_config, ResNetLayerConfig) and layer_config.activation is not None else self.config.activation
-        norm = layer_config.norm if layer_config.norm is not None else self.config.norm
+        # activation
+        if isinstance(layer_config, ResNetLayerConfig) and layer_config.activation is not None:
+            activation = layer_config.activation
+        elif hasattr(self, "config") and hasattr(self.config, "activation") and self.config.activation is not None:
+            activation = self.config.activation
+        else:
+            activation = "ReLU"  # default activation if not specified
+
+        # norm
+        if isinstance(layer_config, ResNetLayerConfig) and layer_config.norm is not None:
+            norm = layer_config.norm
+        elif hasattr(self, "config") and hasattr(self.config, "norm") and self.config.norm is not None:
+            norm = self.config.norm
+        else:
+            norm = "batch"  # default norm if not specified
 
         if isinstance(layer_config, ResNetLayerConfig):
             res_cond_dim = None
@@ -76,10 +89,11 @@ class ModelBase(torch.nn.Module):
                 emit_skip=layer_config.emit_skip if hasattr(layer_config, 'emit_skip') else False,
                 activation=activation,
                 cond_dim=res_cond_dim,
+                pad_mode=layer_config.pad_mode if hasattr(layer_config, 'pad_mode') else "reflect",
                 **{k: v for k, v in layer_config.__dict__.items()
                 if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'sampling',
                                 'sample_factor', 'upsample_method', 'downsample_method', 'activation',
-                                'emit_skip', 'receives_skip', 'time_conditioned', 'cond_dim']}
+                                'emit_skip', 'receives_skip', 'time_conditioned', 'cond_dim', 'pad_mode']}
             )
 
         if isinstance(layer_config, UpsampleConvLayerConfig):
@@ -90,9 +104,10 @@ class ModelBase(torch.nn.Module):
                 kernel_size=layer_config.kernel_size if hasattr(layer_config, 'kernel_size') else 3,
                 norm=norm,
                 separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
+                pad_mode=layer_config.pad_mode,
                 upsample_method=layer_config.upsample_method if hasattr(layer_config, 'upsample_method') else "nearest",
                 sample_factor=layer_config.sample_factor if hasattr(layer_config, 'sample_factor') else 2,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'upsample_method', 'sample_factor', 'emit_skip', 'receives_skip']}
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'upsample_method', 'sample_factor', 'emit_skip', 'receives_skip', 'pad_mode']}
             )
 
         if isinstance(layer_config, DownsampleConvLayerConfig):
@@ -103,9 +118,10 @@ class ModelBase(torch.nn.Module):
                 kernel_size=layer_config.kernel_size if hasattr(layer_config, 'kernel_size') else 3,
                 norm=norm,
                 separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
+                pad_mode=layer_config.pad_mode,
                 downsample_method=layer_config.downsample_method if hasattr(layer_config, 'downsample_method') else "strided",
                 sample_factor=layer_config.sample_factor if hasattr(layer_config, 'sample_factor') else 2,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'downsample_method', 'sample_factor', 'emit_skip', 'receives_skip']}
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'downsample_method', 'sample_factor', 'emit_skip', 'receives_skip', 'pad_mode']}
             )
 
         if isinstance(layer_config, ConvLayerConfig):
@@ -116,7 +132,8 @@ class ModelBase(torch.nn.Module):
                 kernel_size=layer_config.kernel_size if hasattr(layer_config, 'kernel_size') else 3,
                 norm=norm,
                 separable=layer_config.separable if hasattr(layer_config, 'separable') else False,
-                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'emit_skip', 'receives_skip']}
+                pad_mode=layer_config.pad_mode,
+                **{k: v for k, v in layer_config.__dict__.items() if k not in ['dim', 'in_channels', 'out_channels', 'kernel_size', 'norm', 'separable', 'emit_skip', 'receives_skip', 'pad_mode']}
             )
 
         if isinstance(layer_config, PatchAttentionLayerConfig):
