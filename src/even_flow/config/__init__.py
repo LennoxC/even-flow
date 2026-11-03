@@ -8,4 +8,15 @@ from .UNetConfig import UNetConfig
 from .TimeEncoderConfig import TimeEncoderConfig
 from .DiTLayerConfig import DiTLayerConfig
 
-__all__ = ["VariationalAutoencoderConfig", "ConvolutionalVariationalAutoencoderConfig", "DownsampleConvLayerConfig", "ConvLayerConfig", "ResNetLayerConfig", "ActivationLayerConfig", "PatchAttentionLayerConfig", "UpsampleConvLayerConfig", "ProbabilisticLayerConfig", "UNetConfig", "TimeEncoderConfig", "DiTLayerConfig"]
+__all__ = ["VariationalAutoencoderConfig", 
+           "ConvolutionalVariationalAutoencoderConfig", 
+           "DownsampleConvLayerConfig", 
+           "ConvLayerConfig", 
+           "ResNetLayerConfig", 
+           "ActivationLayerConfig", 
+           "PatchAttentionLayerConfig", 
+           "UpsampleConvLayerConfig", 
+           "ProbabilisticLayerConfig", 
+           "UNetConfig", 
+           "TimeEncoderConfig", 
+           "DiTLayerConfig"]
