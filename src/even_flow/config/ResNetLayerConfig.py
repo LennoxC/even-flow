@@ -61,7 +61,7 @@ class ResNetLayerConfig:
                 separable=self.separable,
                 sampling="upsample",
                 sample_factor=self.sample_factor,
-                upsample_method="nearest" if self.downsample_method == "max" else "bilinear",
+                upsample_method="nearest" if self.downsample_method == "max" else "trilinear" if self.dim == 3  else "bilinear",
                 activation=self.activation,
                 receives_skip=self.emit_skip,
                 emit_skip=self.receives_skip
