@@ -36,7 +36,10 @@ class ModelBase(torch.nn.Module):
             if layer_config.time_conditioned:
                 cond_dim = layer_config.cond_dim
                 if cond_dim is None:
-                    cond_dim = getattr(getattr(self.config, "time_encoding", None), "time_encoding_dim", None)
+                    if getattr(self, "config", None) is not None:
+                        cond_dim = getattr(getattr(self.config, "time_encoding", None), "time_encoding_dim", None)
+                    else:
+                        cond_dim = None
                 if cond_dim is None:
                     raise ValueError("DiTLayerConfig is time_conditioned but no cond_dim was given and the model "
                                     "config has no time_encoding. Set time_conditioned=False for models without time.")
