@@ -63,12 +63,14 @@ class ModelBase(torch.nn.Module):
             activation = "ReLU"  # default activation if not specified
 
         # norm
-        if isinstance(layer_config, ResNetLayerConfig) and layer_config.norm is not None:
+        #if isinstance(layer_config, ResNetLayerConfig) and layer_config.norm is not None:
+        #    norm = layer_config.norm
+        if layer_config is not None and hasattr(layer_config, "norm") and layer_config.norm is not None:
             norm = layer_config.norm
         elif hasattr(self, "config") and hasattr(self.config, "norm") and self.config.norm is not None:
             norm = self.config.norm
         else:
-            norm = "batch"  # default norm if not specified
+            norm = "None"  # default to no norm if not specified
 
         if isinstance(layer_config, ResNetLayerConfig):
             res_cond_dim = None
