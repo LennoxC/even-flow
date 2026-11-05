@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from even_flow.guidance.problem import GuidanceProblem
-from typing import List, Optional, Union
+from typing import List, Literal, Optional, Union
 
 class GaussNewtonSampler:
     """
@@ -13,7 +13,7 @@ class GaussNewtonSampler:
             self.p = problem
             self.verbose = verbose
 
-    def cg_solve(self, matvec, b, iters=8, tol=1e-3):
+    def cg_solve(self, matvec, b, iters=8, tol=1e-4):
         """
         Solve Ax = b using the conjugate gradient method, where A is represented by the matvec function.
         """
@@ -31,12 +31,15 @@ class GaussNewtonSampler:
             rs = rs_new
         return x
 
+    
+
     def inference(self, 
-                  latent_shape,
                   guidance_masked,
                   mask,
+                  batch_size=1,
                   mu_x = None,
                   num_steps=50,
+                  solve_method: Literal["cg", "inv"] = "cg",
                   sigma_obs: Union[float, torch.Tensor] = 0.05,
                   sigma_A: Union[float, torch.Tensor] = 0.0,
                   prior_scale: float = 1.0,
@@ -48,11 +51,15 @@ class GaussNewtonSampler:
                   A=None,
                   cg_iters: int = 8,
                   fd_eps: float = 1e-3,
-                  max_step_frac = None):
+                  max_step_frac = None,
+                  unnorm_solve: bool = True,
+                  returns: List[str] = ["z", "x"]):
         """
         Performs inference using the Gauss-Newton method.
         """
 
+        B = batch_size  # batch size
+        latent_shape = (B, *self.p.latent_shape)  # latent shape for the batch
         C = np.shape(mask)[1] # number of channels
         g = torch.as_tensor(guidance_masked, device=self.p.device, dtype=torch.float32)[:, :C]
         m = torch.as_tensor(mask, device=self.p.device, dtype=torch.float32)[:, :C] > 0.5
@@ -76,14 +83,25 @@ class GaussNewtonSampler:
         mu_x = mu_x.detach()
 
         def h(x, t):
-            z = self.p.denorm_latent(x)
-            dec = self.p.vae_model.decode(z, self.p.static_skips) if self.p.static_skips is not None else self.p.vae_model.decode(z)
+            x = self.p.x1(x, t)
+            dec = self.p.decode(x)
             if A is not None:
                 dec = A(dec)
             return dec[:, :C].flatten()[obs_idx]
 
-        def gn(xt, t, s2):
+        def compute_var(r, s2):
+            var = var0 * (1 + kappa * s2.sqrt().pow(2) / (1 - s2.sqrt()).clamp_min(0.1))
+            if robust_nu is not None:
+                var = var * (robust_nu + r ** 2 / var) / (robust_nu + 1)
+            return var
 
+        def clip_step(dx, xt):
+            if max_step_frac is None:
+                return dx
+            max_norm = max_step_frac * xt.norm()
+            return dx * torch.clamp(max_norm / (dx.norm() + 1e-12), max=1.0)  # no CPU sync
+
+        def gn(xt, t, s2):
             with torch.enable_grad():
                 xg = xt.detach().requires_grad_(True)
                 y_pred = h(xg, t)
@@ -100,20 +118,43 @@ class GaussNewtonSampler:
 
             with torch.no_grad():
                 r = y_target - y0
-                var = var0 * (1 + kappa * s2.sqrt().pow(2) / (1 - s2.sqrt()).clamp_min(0.1))
-                if robust_nu is not None:
-                    var = var * (robust_nu + r ** 2 / var) / (robust_nu + 1)
-
+                var = compute_var(r, s2)
                 matvec = lambda c: s2 * J(Jt(c)) + var * c
                 c = self.cg_solve(matvec, r, iters=cg_iters)
-                dx = (s2 * Jt(c)).view_as(xg)
-
-                if max_step_frac is not None:
-                    max_norm = max_step_frac * xg.norm()
-                    if dx.norm() > max_norm:
-                        dx = dx * (max_norm / dx.norm())
-            
+                dx = clip_step((s2 * Jt(c)).view_as(xg), xg)
             return dx.detach(), r
+
+        def build_G(xt, t, chunk=512):
+            """Returns (h(xt), G) with G = dh/dx of shape (n_obs, D)."""
+            with torch.enable_grad():
+                xg = xt.detach().requires_grad_(True)
+                y = h(xg, t)
+                rows = []
+                for i in range(0, n_obs, chunk):
+                    j = min(i + chunk, n_obs)
+                    E = torch.zeros(j - i, n_obs, device=xt.device, dtype=y.dtype)
+                    E[torch.arange(j - i, device=xt.device), torch.arange(i, j, device=xt.device)] = 1.0
+                    (gx,) = torch.autograd.grad(y, xg, grad_outputs=E,
+                                                is_grads_batched=True, retain_graph=True)
+                    rows.append(gx.flatten(1))
+            return y.detach(), torch.cat(rows)  # (n_obs,), (n_obs, D)
+
+        def gn_inv(xt, t, s2):
+            y0, G = build_G(xt, t)
+            with torch.no_grad():
+                r = y_target - y0                      # residual at xt, NOT G @ xt
+                var = compute_var(r, s2)
+                Amat = s2 * (G @ G.T)
+                Amat.diagonal().add_(var)
+                L, info = torch.linalg.cholesky_ex(Amat)
+                if info.item() == 0:
+                    c = torch.cholesky_solve(r.unsqueeze(-1), L).squeeze(-1)
+                else:                                   # fallback if not numerically PD
+                    c = torch.linalg.solve(Amat, r)
+                dx = clip_step((s2 * (G.T @ c)).view_as(xt), xt)
+            return dx.detach(), r
+
+        step_fn = gn_inv if solve_method == "inv" else gn
 
         # the actual iterative FLAIR/Gauss Newton loop
         for i, step in enumerate(reversed(range(num_steps))):
@@ -125,30 +166,32 @@ class GaussNewtonSampler:
             n_it = final_gn_iters if step == 0 else gn_iters
 
             for k in range(n_it):
-                dx, r = gn(xt, t, s2)
+                dx, r = step_fn(xt, t, s2)
                 xt = xt.detach() + dx
 
                 if self.verbose:
                     print(f"Step {i}.{k} s={s.item():.3f}  raw|r|={r.norm().item():.4f}  "
-                      f"whitened rms={(r / var0.sqrt()).pow(2).mean().sqrt().item():.3f}  "
-                      f"|dx|/|xt|={(dx.norm() / xt.norm()).item():.4f}")
+                          f"whitened rms={(r / var0.sqrt()).pow(2).mean().sqrt().item():.3f}  "
+                          f"|dx|/|xt|={(dx.norm() / xt.norm()).item():.4f}")
 
             with torch.no_grad():
                 x1_hat = self.p.x1(xt, t)
                 eps_hat = (xt - t * x1_hat) / s
                 if eta > 0:
                     eps_hat = (1 - eta ** 2) ** 0.5 * eps_hat + eta * torch.randn_like(eps_hat)
-
                 mu_x = x1_hat
                 e_hat = eps_hat
 
-        z = self.p.denorm_latent(mu_x)
-        with torch.no_grad():
-            x_decoded = self.p.vae_model.decode(z, self.p.static_skips) if self.p.static_skips is not None else self.p.vae_model.decode(z)
-            x_unnorm = self.p.denorm_data(x_decoded)
+        # final denormalization and decoding
+        return_dict = {}
+        z = self.p.denorm_latent(mu_x) # returned as the denormalized latent
+        if "z" in returns:
+            return_dict["z"] = z
+        if "x" in returns:
+            with torch.no_grad():
+                x_decoded = self.p.decode(mu_x)
+                if unnorm_solve:
+                    x_decoded = self.p.denorm_data(x_decoded)
+            return_dict["x"] = x_decoded
 
-        return {
-            "z": z,
-            "x_decoded": x_decoded,
-            "x_unnorm": x_unnorm
-        }
+        return return_dict

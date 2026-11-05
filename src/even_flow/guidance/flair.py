@@ -51,19 +51,19 @@ class FLAIRSampler:
         return mu_x.detach(), losses
         
     def inference(self, 
-                  latent_shape, 
                   guidance_masked, 
                   mask, 
+                  batch_size=1,
                   mu_x = None, 
                   lr=lambda s: 0.001, 
                   num_steps=50, 
                   dc_iter=10,
-                  returns=["z", "x_unnorm", "x_decoded"],
+                  unnorm_solve: bool = True,
+                  returns=["z", "x"],
                   **kwargs):
         """
         Performs inference using the FLAIR guidance.
         Args:
-            latent_shape: The shape of the latent space.
             guidance_masked: The guidance mask.
             mask: The mask for the input data.
             mu_x: Optional initial guess for x0. If None, a random tensor is used.
@@ -77,17 +77,14 @@ class FLAIRSampler:
         """
         device = self.p.device
         
-        vae_model = self.p.vae_model # on device and in eval mode
-        
-        static = self.p.static_data # should have moved static to device
         static_skips = self.p.static_skips # should have moved static_skips to device
 
         clamp_min_value = kwargs.get("clamp_min_value", 1e-3)
 
+        B = batch_size  # batch size
+        latent_shape = (B, *self.p.latent_shape)  # latent shape for the batch
         e_hat = torch.randn(latent_shape, device=device) # initial noise
         mu_x = torch.randn(latent_shape, device=device) if mu_x is None else mu_x.to(device) # initial guess for x0
-
-        B = latent_shape[0]
 
         g = torch.tensor(guidance_masked, device=device, dtype=torch.float32)
         m = torch.tensor(mask, device=device, dtype=torch.float32)
@@ -114,20 +111,16 @@ class FLAIRSampler:
             x_hat_1 = xt + t * v_theta
             e_hat = self.a(s) * x_hat_1 + torch.sqrt(1 - self.a(s) ** 2) * e
 
-        # unnorm and decode
-        z = self.p.denorm_latent(mu_x)
-        x_decoded = vae_model.decode(z, static_skips=static_skips) if static_skips is not None else vae_model.decode(z)
-        x_unnorm = self.p.denorm_data(x_decoded)
-
+        # final denormalization and decoding
+        return_dict = {}
+        z = self.p.denorm_latent(mu_x) # returned as the denormalized latent
         if "z" in returns:
-            z = self.p.denorm_latent(mu_x)
-        if "x_unnorm" in returns:
-            x_unnorm = self.p.denorm_data(x_decoded)
-        if "x_decoded" in returns:
-            x_decoded = vae_model.decode(z, static_skips=static_skips) if static_skips is not None else vae_model.decode(z)
+            return_dict["z"] = z
+        if "x" in returns:
+            with torch.no_grad():
+                x_decoded = self.p.decode(mu_x)
+                if unnorm_solve:
+                    x_decoded = self.p.denorm_data(x_decoded)
+            return_dict["x"] = x_decoded
 
-        return {
-            "z": z,
-            "x_decoded": x_decoded,
-            "x_unnorm": x_unnorm,
-        }
+        return return_dict

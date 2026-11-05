@@ -4,6 +4,7 @@ import torch
 
 class GuidanceProblem(Protocol):
     device: torch.device | str
+    latent_shape: tuple[int, ...]
 
     def x1(self, xt: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """Flow model's clean-latent prediction (normalised latent space)."""
