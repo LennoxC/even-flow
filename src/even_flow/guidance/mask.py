@@ -22,6 +22,9 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
+# --------------------------------------------------------------------------- #
+# Result container
+# --------------------------------------------------------------------------- #
 @dataclass
 class MaskResult:
     guidance: np.ndarray            # (..., Cg, H, W) ground truth (or obs values), guidance channels only
@@ -35,6 +38,35 @@ class MaskResult:
     def n_obs(self) -> int:
         """Number of scalar observations the sampler will see."""
         return int(self.mask.sum())
+
+    @property
+    def batch_size(self) -> int:
+        return self.mask.shape[0] if self.mask.ndim == 4 else 1
+
+    @property
+    def n_obs_per_element(self) -> List[int]:
+        m = self.mask if self.mask.ndim == 4 else self.mask[None]
+        return [int(x) for x in m.reshape(m.shape[0], -1).sum(1)]
+
+    @classmethod
+    def stack(cls, results: Sequence["MaskResult"]) -> "MaskResult":
+        """Concatenate results along the batch axis. Elements may come from different mask types
+        (and different guidance fields); each result may itself be unbatched (C,H,W) or batched (B,C,H,W)."""
+        if len({r.n_guidance_channels for r in results}) != 1:
+            raise ValueError("All results must use the same n_guidance_channels")
+        if len({r.guidance_masked.shape[-3:] for r in results}) != 1:
+            raise ValueError(
+                "Results differ in (channels, H, W): " + str([r.guidance_masked.shape[-3:] for r in results])
+                + ". Slice the guidance to the same channel count (e.g. guidance[:3]) before masking, "
+                  "or build ManualMask with n_channels matching the others.")
+
+        def cat(name):
+            return np.concatenate([getattr(r, name) if getattr(r, name).ndim == 4 else getattr(r, name)[None]
+                                   for r in results], axis=0)
+
+        return cls(guidance=cat("guidance"), guidance_masked=cat("guidance_masked"), mask=cat("mask"),
+                   guidance_temporal=cat("guidance_temporal"), mask_temporal=cat("mask_temporal"),
+                   n_guidance_channels=results[0].n_guidance_channels)
 
     @classmethod
     def from_boolean_mask(cls, guidance, mask, n_guidance_channels: int = 3) -> "MaskResult":
@@ -69,6 +101,10 @@ class MaskResult:
             g, m = g[None], m[None]
         return {"guidance_masked": g, "mask": m}
 
+
+# --------------------------------------------------------------------------- #
+# Ground-truth masks
+# --------------------------------------------------------------------------- #
 class Mask(ABC):
     """Selects observed locations from a full (C, H, W) field.
 
@@ -106,6 +142,21 @@ class Mask(ABC):
         if res.n_obs == 0:
             raise ValueError("Mask selected no observations in the guidance channels.")
         return res
+
+    def apply_batch(self, guidance: np.ndarray, batch_size: Optional[int] = None,
+                    n_guidance_channels: int = 3, rng: Optional[np.random.Generator] = None) -> MaskResult:
+        """Batched version of apply. guidance is (C,H,W) (shared across the batch, needs batch_size)
+        or (B,C,H,W) (one field per element). Stochastic masks draw independently per element."""
+        guidance = np.asarray(guidance)
+        if guidance.ndim == 3:
+            if batch_size is None:
+                raise ValueError("batch_size is required when guidance is (C, H, W)")
+            guidance = np.broadcast_to(guidance, (batch_size, *guidance.shape))
+        elif guidance.ndim != 4 or (batch_size is not None and batch_size != guidance.shape[0]):
+            raise ValueError(f"guidance {guidance.shape} incompatible with batch_size={batch_size}")
+        if rng is None:
+            rng = np.random.default_rng(self.seed)   # one generator, advanced across the batch
+        return MaskResult.stack([self.apply(g, n_guidance_channels, rng) for g in guidance])
 
     __call__ = apply
 
@@ -174,6 +225,9 @@ class UnionMask(Mask):
         return out
 
 
+# --------------------------------------------------------------------------- #
+# Station observations
+# --------------------------------------------------------------------------- #
 @dataclass
 class Observation:
     """One station. pos = (x, y) = (column, row). values: one per channel in physical units, None = unobserved."""
@@ -198,9 +252,11 @@ class ManualMask:
     temperature_in_celsius: channel 0 is given in Celsius and converted to Kelvin before normalising.
     """
 
-    def __init__(self, observations: Sequence, channel_names: Sequence[str], 
-                 norm_params: Optional[Dict[str, Dict[str, float]]] = None, temperature_in_celsius: bool = True, 
-                 shape: Tuple[int, int] = (1024, 1024), n_channels: int = 3):
+    def __init__(self, observations: Sequence,
+                 channel_names: Sequence[str], 
+                 norm_params: Optional[Dict[str, Dict[str, float]]] = None,
+                 shape: Tuple[int, int] = (1024, 1024),
+                 n_channels: int = 3, temperature_in_celsius: bool = True):
         self.observations: List[List[Observation]] = [self._as_station_list(o) for o in observations]
         self.norm_params, self.channel_names = norm_params, tuple(channel_names)
         self.shape, self.n_channels, self.celsius = tuple(shape), n_channels, temperature_in_celsius
@@ -243,7 +299,7 @@ class ManualMask:
         return res
 
 
-def build_grid_mask(guidance, keep):
+def build_mask(guidance, keep):
     return GridMask(keep).apply(guidance).as_legacy_tuple()
 
 def build_random_mask(guidance, keep):
