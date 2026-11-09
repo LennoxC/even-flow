@@ -16,9 +16,9 @@ class FLAIRSampler:
         return 1 - t
 
     def distance(self, x_decoded, g, m):
-        c = x_decoded.shape[1] # number of channels
-        guidance, mask = g[:c], m[:c].bool()
-        diff = torch.where(mask, x_decoded - guidance, torch.zeros_like(x_decoded))
+        #c = x_decoded.shape[1] # number of channels
+        #guidance, mask = g[:c], m[:c].bool()
+        diff = torch.where(m.bool(), x_decoded - g, torch.zeros_like(x_decoded))
         return torch.sqrt(torch.sum(diff ** 2))
 
     def hard_data_consistency(self, 
@@ -37,8 +37,7 @@ class FLAIRSampler:
 
         for i in range(iter):
             optimizer.zero_grad()
-            z = self.p.denorm_latent(mu_x)
-            x_decoded = vae_model.decode(z, static_skips=static_skips) if static_skips is not None else vae_model.decode(z)
+            x_decoded = self.p.decode(mu_x)
             
             loss = self.distance(x_decoded, g, m)
             loss.backward()
@@ -86,9 +85,6 @@ class FLAIRSampler:
         e_hat = torch.randn(latent_shape, device=device) # initial noise
         mu_x = torch.randn(latent_shape, device=device) if mu_x is None else mu_x.to(device) # initial guess for x0
 
-        g = torch.tensor(guidance_masked, device=device, dtype=torch.float32)
-        m = torch.tensor(mask, device=device, dtype=torch.float32)
-
         for _, step in enumerate(reversed(range(num_steps))):
             s = torch.tensor([(step + 0.5) / num_steps], device=device, dtype=torch.float32)
             t = 1 - s
@@ -104,7 +100,7 @@ class FLAIRSampler:
             delta_r = v_theta - ut
 
             mu_x = mu_x - s * delta_r
-            mu_x, losses = self.hard_data_consistency(mu_x, g, m, step, iter=dc_iter, lr = lr, static_skips=static_skips)
+            mu_x, losses = self.hard_data_consistency(mu_x, guidance_masked, mask, step, iter=dc_iter, lr = lr, static_skips=static_skips)
 
             e = torch.randn(latent_shape, device=device)
 

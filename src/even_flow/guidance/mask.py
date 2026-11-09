@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
+import torch
 
 # --------------------------------------------------------------------------- #
 # Result container
@@ -93,12 +94,18 @@ class MaskResult:
         return (self.guidance, self.guidance_masked, self.mask,
                 self.guidance_temporal, self.mask_temporal)
 
-    def inference_kwargs(self) -> Dict[str, np.ndarray]:
+    def inference_kwargs(self, device=None) -> Dict[str, object]:
         """Kwargs for GaussNewtonSampler.inference. Adds a batch dim to unbatched (C,H,W) data,
-        so that `C = np.shape(mask)[1]` in the sampler is always the channel count."""
+        so that `C = np.shape(mask)[1]` in the sampler is always the channel count.
+ 
+        device=None: numpy arrays (samplers that call torch.as_tensor(..., device=...) move them themselves).
+        device=...:  float32 torch tensors on that device (NaNs preserved in guidance_masked)."""
         g, m = self.guidance_masked, self.mask
         if m.ndim == 3:
             g, m = g[None], m[None]
+        if device is not None:
+            g = torch.as_tensor(g, dtype=torch.float32, device=device)
+            m = torch.as_tensor(m, dtype=torch.float32, device=device)
         return {"guidance_masked": g, "mask": m}
 
 
