@@ -1,10 +1,6 @@
 import torch
+import torch.nn.functional as F
 from abc import ABC, abstractmethod
-
-# changes for dataclasses (WIP):
-# - norm is now a string instead of a boolean. Must be passed into the Conv layer.
-# - new variable: separable: bool = False
-# - activation is no longer passed into ConvBase
 
 class ConvBase(torch.nn.Module):
     """
@@ -15,40 +11,53 @@ class ConvBase(torch.nn.Module):
     - Activations are not included in this base class, and should be added as a separate layer if desired. ResNetLayers implement an activation, and are composed of two ConvBase layers.
     """
 
-    def __init__(self,
-                 dim: int, 
-                 in_channels: int, 
-                 out_channels: int, 
-                 kernel_size: int = 3, 
-                 norm: str = "group",
-                 separable: bool = False,
-                 **kwargs):
+    def __init__(self, dim, in_channels, out_channels, kernel_size=3, norm="group",
+                 separable=False, receives_skip=False, emit_skip=False, no_skip=False,
+                 stride: int = 1, pad_mode: str = "reflect", **kwargs):
         super().__init__()
         self.dim = dim
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.separable = separable
-
-        # Set padding to maintain the same spatial dimensions after convolution by default. This can be overridden by specifying a different padding in kwargs.
-        if not hasattr(self, 'padding'):
-            self.padding = kernel_size // 2
-
-        if self.separable:
+        self.receives_skip = receives_skip
+        self.emit_skip = emit_skip
+        self.stride = stride
+        self.pad_mode = pad_mode
+        self.no_skip = no_skip
+ 
+        # "same"-style padding: total = k - stride, split asymmetrically if odd.
+        total = kernel_size - stride
+        left = total // 2
+        right = total - left
+        self.padding = left  # kept for the transposed-conv path below
+        self.pad_tuple = (left, right) * dim   # F.pad wants (W_l, W_r, H_l, H_r, ...)
+ 
+        Conv = getattr(torch.nn, f"Conv{dim}d")
+        if separable:
             self.conv = torch.nn.Sequential(
-                getattr(torch.nn, f"Conv{dim}d")(in_channels, in_channels, kernel_size, padding=self.padding, groups=in_channels, **kwargs),
-                getattr(torch.nn, f"Conv{dim}d")(in_channels, out_channels, kernel_size=1, **kwargs)
+                Conv(in_channels, in_channels, kernel_size, stride=stride, padding=0,
+                     groups=in_channels, **kwargs),
+                Conv(in_channels, out_channels, kernel_size=1, **kwargs),
             )
         else:
-            self.conv = getattr(torch.nn, f"Conv{dim}d")(in_channels, out_channels, kernel_size, padding=self.padding, **kwargs)
+            self.conv = Conv(in_channels, out_channels, kernel_size, stride=stride,
+                             padding=0, **kwargs)
 
         self.norm = self._norm(norm, out_channels, dim)
 
     def forward(self, x):
         x = self.preprocess(x)
+        x = self.pad(x)
         x = self.conv(x)
-        x = self.normalize(x)
-        x = self.postprocess(x)
+        if self.norm is not None:
+            x = self.norm(x)
+        
+        return self.postprocess(x)
+
+    def pad(self, x):
+        if any(self.pad_tuple):
+            x = F.pad(x, self.pad_tuple, mode=self.pad_mode)
         return x
 
     def preprocess(self, x):
@@ -67,9 +76,11 @@ class ConvBase(torch.nn.Module):
             return torch.nn.GroupNorm(1, channels)
         if norm == "batch":
             return getattr(torch.nn, f"BatchNorm{dim}d")(channels)
+        if norm == "None":
+            return None
         else:
             raise ValueError(f"Invalid normalization type: {norm}. Supported types are 'group' and 'batch'.")
-        return None
+        
 
 class ConvLayer(ConvBase):
     """
@@ -79,7 +90,7 @@ class ConvLayer(ConvBase):
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if self.in_channels != self.out_channels:
+        if self.in_channels != self.out_channels and not self.no_skip:
             self.skip_conv = getattr(torch.nn, f"Conv{self.dim}d")(self.in_channels, self.out_channels, kernel_size=1)
         else:
             self.skip_conv = None
@@ -90,7 +101,11 @@ class ConvLayer(ConvBase):
         x = super().forward(x)
         if self.skip_conv is not None:
             skip_x = self.skip_conv(skip_x)
-        return x + skip_x
+        
+        if self.no_skip:
+            return x
+        else:
+            return x + skip_x
 
 class UpsampleConvLayer(ConvBase):
     """
@@ -112,11 +127,13 @@ class UpsampleConvLayer(ConvBase):
 
         self.upsample_factor = sample_factor
         if upsample_method == "transposed":
+            self.pad_tuple = (0,) * (2 * self.dim)   # transposed conv handles its own padding
+            pad = (self.kernel_size - self.upsample_factor) // 2
             if self.separable: # if separable, then self.conv is a sequential of two convolutions.
-                self.conv[0] = getattr(torch.nn, f"ConvTranspose{self.dim}d")(self.in_channels, self.in_channels, kernel_size=self.kernel_size, stride=self.upsample_factor, padding=self.padding, groups=self.in_channels)
+                self.conv[0] = getattr(torch.nn, f"ConvTranspose{self.dim}d")(self.in_channels, self.in_channels, kernel_size=self.kernel_size, stride=self.upsample_factor, padding=pad, groups=self.in_channels)
                 self.conv[1] = getattr(torch.nn, f"ConvTranspose{self.dim}d")(self.in_channels, self.out_channels, kernel_size=1, stride=1)
             else:
-                self.conv = getattr(torch.nn, f"ConvTranspose{self.dim}d")(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride=self.upsample_factor, padding=self.padding)
+                self.conv = getattr(torch.nn, f"ConvTranspose{self.dim}d")(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride=self.upsample_factor, padding=pad)
         else:    
             self.upsample = torch.nn.Upsample(scale_factor=self.upsample_factor, mode=upsample_method)
 
@@ -124,33 +141,21 @@ class UpsampleConvLayer(ConvBase):
         return f"UpsampleConvLayer{self.dim}d, in_channels={self.in_channels}, out_channels={self.out_channels}, kernel_size={self.conv.kernel_size}, upsample_method={self.upsample_method})"
 
     def preprocess(self, x):
-        x = self.upsample(x)
-        return x
+        return x if self.upsample_method == "transposed" else self.upsample(x)
 
 class DownsampleConvLayer(ConvBase):
     """
     A basic convolutional layer (1d, 2d, 3d) with an activation function and downsampling.
     Include downsampling using a specified method (e.g., max pooling, average pooling, strided).
     """
-    def __init__(self, 
-                    downsample_method: str = "strided",
-                    sample_factor: int = 2,
-                    **kwargs):
-        super().__init__(**kwargs)
-
+    def __init__(self, downsample_method="strided", sample_factor=2, **kwargs):
+        stride = sample_factor if downsample_method == "strided" else 1
+        super().__init__(stride=stride, **kwargs)
         self.downsample_method = downsample_method
         self.downsample_factor = sample_factor
-        if downsample_method == "strided":
-            if self.separable: # if separable, then self.conv is a sequential of two convolutions.
-                self.conv[0].stride = self.downsample_factor
-                self.conv[1].stride = 1
-            else:
-                self.conv.stride = self.downsample_factor
-        else:
-            self.downsample = getattr(
-                torch.nn, 
-                f"MaxPool{self.dim}d")(kernel_size=self.downsample_factor) if downsample_method == "max" else getattr(torch.nn, f"AvgPool{self.dim}d"
-            )(kernel_size=self.downsample_factor)
+        if downsample_method != "strided":
+            self.downsample = (getattr(torch.nn, f"MaxPool{self.dim}d") if downsample_method == "max" else getattr(torch.nn, f"AvgPool{self.dim}d"))
+            self.downsample = getattr(torch.nn, f"{'Max' if downsample_method=='max' else 'Avg'}Pool{self.dim}d")(kernel_size=sample_factor)
 
     def __str__(self):
         return f"DownsampleConvLayer{self.dim}d, in_channels={self.in_channels}, out_channels={self.out_channels}, kernel_size={self.conv.kernel_size}, downsample_method={self.downsample_method})"

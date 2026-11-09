@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import Optional
 
 @dataclass
 class ResNetLayerConfig:
@@ -42,6 +43,9 @@ class ResNetLayerConfig:
     activation: str = "GELU"
     emit_skip: bool = False # whether to emit a skip connection from this layer to the decoder
     receives_skip: bool = False # whether to receive a skip connection from the encoder
+    time_conditioned: bool = False
+    cond_dim: Optional[int] = None
+    pad_mode: str = "reflect" # padding mode for the convolution (reflect, replicate, circular, or constant)
 
     def convert_to_decoder_layer(self):
         """
@@ -58,7 +62,8 @@ class ResNetLayerConfig:
                 separable=self.separable,
                 sampling="upsample",
                 sample_factor=self.sample_factor,
-                upsample_method="nearest" if self.downsample_method == "max" else "bilinear",
+                pad_mode=self.pad_mode,
+                upsample_method="nearest" if self.downsample_method == "max" else "trilinear" if self.dim == 3  else "bilinear",
                 activation=self.activation,
                 receives_skip=self.emit_skip,
                 emit_skip=self.receives_skip
@@ -76,7 +81,8 @@ class ResNetLayerConfig:
                 downsample_method="max" if self.upsample_method == "nearest" else "avg",
                 activation=self.activation,
                 receives_skip=self.emit_skip,
-                emit_skip=self.receives_skip
+                emit_skip=self.receives_skip,
+                pad_mode=self.pad_mode
             )
         else:
             return ResNetLayerConfig(
@@ -89,5 +95,6 @@ class ResNetLayerConfig:
                 sampling=None,
                 activation=self.activation,
                 receives_skip=self.emit_skip,
-                emit_skip=self.receives_skip
+                emit_skip=self.receives_skip,
+                pad_mode=self.pad_mode
             )

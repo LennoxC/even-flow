@@ -38,13 +38,9 @@ CONFIGS = [
         encoder_layers=[
             ResNetLayerConfig(dim=3, in_channels=3, out_channels=16, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="max"),
             ResNetLayerConfig(dim=3, in_channels=16, out_channels=32, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="avg", separable=True),
-            ResNetLayerConfig(dim=3, in_channels=32, out_channels=64, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="max"),
-            ConvLayerConfig(dim=3, in_channels=64, out_channels=128, kernel_size=3)
         ],
-        probabilistic_layer=ProbabilisticLayerConfig(dim=3, latent_dim=64, channels=128, logvar_clamp=(-30.0, 30.0)),
+        probabilistic_layer=ProbabilisticLayerConfig(dim=3, latent_dim=64, channels=32, logvar_clamp=(-30.0, 30.0)),
         decoder_layers=[
-            ConvLayerConfig(dim=3, in_channels=128, out_channels=64, kernel_size=3),
-            ResNetLayerConfig(dim=3, in_channels=64, out_channels=32, kernel_size=3, activation="GELU", sampling="upsample", upsample_method="nearest"),
             ResNetLayerConfig(dim=3, in_channels=32, out_channels=16, kernel_size=3, activation="GELU", sampling="upsample", upsample_method="trilinear", separable=True),
             ResNetLayerConfig(dim=3, in_channels=16, out_channels=3, kernel_size=3, activation="Sigmoid", sampling="upsample", upsample_method="nearest")
         ],
@@ -57,11 +53,9 @@ CONFIGS = [
             ResNetLayerConfig(dim=3, in_channels=3, out_channels=16, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="max"),
             ResNetLayerConfig(dim=3, in_channels=16, out_channels=32, kernel_size=3, activation="GELU", sampling="downsample", downsample_method="avg", separable=True),
             DownsampleConvLayerConfig(dim=3, in_channels=32, out_channels=64, kernel_size=3, downsample_method="max"), # this should be converted to an UpsampleConvLayerConfig in the decoder
-            ActivationLayerConfig(activation="ReLU"),
-            ConvLayerConfig(dim=3, in_channels=64, out_channels=128, kernel_size=3), # the decoder will have a ConvLayerConfig with in_channels=128, out_channels=64
-            ActivationLayerConfig(activation="GELU")
+            ActivationLayerConfig(activation="ReLU")
         ],
-        probabilistic_layer=ProbabilisticLayerConfig(dim=3, latent_dim=64, channels=128, logvar_clamp=(-30.0, 30.0)),
+        probabilistic_layer=ProbabilisticLayerConfig(dim=3, latent_dim=64, channels=64, logvar_clamp=(-30.0, 30.0)),
         activation="GELU")
 ]
 

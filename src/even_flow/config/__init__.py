@@ -4,5 +4,19 @@ from .ResNetLayerConfig import ResNetLayerConfig
 from .ActivationLayerConfig import ActivationLayerConfig
 from .AttentionLayerConfig import PatchAttentionLayerConfig
 from .ProbabilisticLayerConfig import ProbabilisticLayerConfig
+from .UNetConfig import UNetConfig
+from .TimeEncoderConfig import TimeEncoderConfig
+from .DiTLayerConfig import DiTLayerConfig
 
-__all__ = ["VariationalAutoencoderConfig", "ConvolutionalVariationalAutoencoderConfig", "DownsampleConvLayerConfig", "ConvLayerConfig", "ResNetLayerConfig", "ActivationLayerConfig", "PatchAttentionLayerConfig", "UpsampleConvLayerConfig", "ProbabilisticLayerConfig"]
+__all__ = ["VariationalAutoencoderConfig", 
+           "ConvolutionalVariationalAutoencoderConfig", 
+           "DownsampleConvLayerConfig", 
+           "ConvLayerConfig", 
+           "ResNetLayerConfig", 
+           "ActivationLayerConfig", 
+           "PatchAttentionLayerConfig", 
+           "UpsampleConvLayerConfig", 
+           "ProbabilisticLayerConfig", 
+           "UNetConfig", 
+           "TimeEncoderConfig", 
+           "DiTLayerConfig"]

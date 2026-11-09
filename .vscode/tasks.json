@@ -22,6 +22,11 @@
             "label": "run demos",
             "type": "shell",
             "command": "pixi run --environment test pytest -m demos ./src/even_flow/tests"
+        },
+        {
+            "label": "run layer tests",
+            "type": "shell",
+            "command": "pixi run --environment test pytest -m layer ./src/even_flow/tests"
         }
     ]
 }
