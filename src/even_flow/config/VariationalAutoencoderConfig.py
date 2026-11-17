@@ -1,6 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 
+from even_flow.config.ActivationLayerConfig import ChannelwiseActivationLayerConfig
+
 @dataclass(kw_only=True)
 class VariationalAutoencoderConfig:
     """
@@ -14,6 +16,7 @@ class VariationalAutoencoderConfig:
     input_dim: tuple[int, int, int] # input dims [channels, height, width]
     output_dim: tuple[int, int, int] = None # output dims [channels, height, width]. If None, output dims will be the same as input dims
 
+    channelwise_activation: ChannelwiseActivationLayerConfig = None # configuration for channelwise activation layer. If None, no channelwise activation layer will be used.
     activation: str = "GELU" # activation function
 
 @dataclass

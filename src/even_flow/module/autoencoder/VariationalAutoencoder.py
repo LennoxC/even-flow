@@ -1,3 +1,4 @@
+from even_flow.module.activation.ChannelwiseActivation import ChannelwiseActivation
 import torch
 from abc import ABC, abstractmethod
 from even_flow.config import VariationalAutoencoderConfig, ConvolutionalVariationalAutoencoderConfig, ResNetLayerConfig
@@ -74,6 +75,12 @@ class VariationalAutoencoderBase(UModelBase):
         else:
             raise ValueError("No static layers defined in the config. Cannot precompute static skips.")
 
+    def build_channelwise_activation(self):
+        if self.config.channelwise_activation is not None:
+            return ChannelwiseActivation(self.config.channelwise_activation.activations, dim=self.config.channelwise_activation.dim)
+        else:
+            return None
+
     # ========== utility functions ==========
 
     def print_model_summary(self, verbose=False):
@@ -146,7 +153,7 @@ class ConvolutionalVariationalAutoencoder(VariationalAutoencoderBase):
         for layer_config in configs:
             layers.append(self._build_layer(layer_config))
             receive_flags.append(getattr(layer_config, 'receives_skip', False))
-        return Decoder(layers, receive_flags)
+        return Decoder(layers, receive_flags, channelwise_activation=self.build_channelwise_activation())
 
     def build_static_encoder(self):
         layers, emit_flags = [], []

@@ -1,10 +1,11 @@
 import torch
 
 class Decoder(torch.nn.Module):
-    def __init__(self, layers: list[torch.nn.Module], receive_flags: list[bool]):
+    def __init__(self, layers: list[torch.nn.Module], receive_flags: list[bool], channelwise_activation: torch.nn.Module = None):
         super().__init__()
         self.layers = torch.nn.ModuleList(layers)
         self.receive_flags = receive_flags
+        self.channelwise_activation = channelwise_activation
 
     def forward(self, z, static_skips):
         # static_skips arrives fine->coarse (from StaticEncoder).
@@ -17,4 +18,6 @@ class Decoder(torch.nn.Module):
                 skip = skip_stack.pop(0)
                 x = torch.cat([x, skip], dim=1)
             x = layer(x)
+        if self.channelwise_activation is not None:
+            x = self.channelwise_activation(x)
         return x
