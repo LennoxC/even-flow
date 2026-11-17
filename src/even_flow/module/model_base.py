@@ -3,10 +3,11 @@ from abc import ABC, abstractmethod
 from even_flow.config import ResNetLayerConfig
 from even_flow.module.conv.ConvLayer import UpsampleConvLayer, DownsampleConvLayer, ConvLayer
 from even_flow.module.activation.ActivationLayer import ActivationLayer
+from even_flow.module.activation.ChannelwiseActivation import ChannelwiseActivation
 from even_flow.module.conv.ResNetLayer import ResNetLayer
 from even_flow.module.patch_attention.PatchAttentionBlock import PatchAttentionLayer
 from even_flow.config import UpsampleConvLayerConfig
-from even_flow.config import DownsampleConvLayerConfig, ConvLayerConfig, UpsampleConvLayerConfig, ActivationLayerConfig, PatchAttentionLayerConfig
+from even_flow.config import DownsampleConvLayerConfig, ConvLayerConfig, UpsampleConvLayerConfig, ActivationLayerConfig, ChannelwiseActivationLayerConfig, PatchAttentionLayerConfig
 from even_flow.config import DiTLayerConfig
 from even_flow.module.dit.DiTLayer import DiTLayer
 
@@ -30,6 +31,9 @@ class ModelBase(torch.nn.Module):
 
         if isinstance(layer_config, ActivationLayerConfig):
             return ActivationLayer(activation=layer_config.activation)
+
+        if isinstance(layer_config, ChannelwiseActivationLayerConfig):
+            return ChannelwiseActivation(activations=layer_config.activations, dim=layer_config.dim)
 
         if isinstance(layer_config, DiTLayerConfig):
             cond_dim = None

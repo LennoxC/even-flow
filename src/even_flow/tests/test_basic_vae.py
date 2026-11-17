@@ -1,7 +1,7 @@
 import pytest
 import torch
 from even_flow.module.autoencoder.VariationalAutoencoder import ConvolutionalVariationalAutoencoder
-from even_flow.config import ConvolutionalVariationalAutoencoderConfig, ProbabilisticLayerConfig, DownsampleConvLayerConfig, UpsampleConvLayerConfig, ResNetLayerConfig, ConvLayerConfig, ActivationLayerConfig
+from even_flow.config import ConvolutionalVariationalAutoencoderConfig, ProbabilisticLayerConfig, DownsampleConvLayerConfig, UpsampleConvLayerConfig, ResNetLayerConfig, ConvLayerConfig, ActivationLayerConfig, ChannelwiseActivationLayerConfig
 
 CONFIGS = [
     # test with solely ConvLayer layers. These are the simplest layers and have no activation function.
@@ -57,6 +57,7 @@ CONFIGS = [
             ActivationLayerConfig(activation="GELU")
         ],
         probabilistic_layer=ProbabilisticLayerConfig(latent_dim=64, channels=128, dim=2, logvar_clamp=(-30.0, 30.0)),
+        channelwise_activation=ChannelwiseActivationLayerConfig(activations=[torch.nn.Identity(), torch.nn.ReLU(), torch.nn.Hardtanh(min_val=0, max_val=1)], dim=1),
         activation="GELU"),
 ]
 

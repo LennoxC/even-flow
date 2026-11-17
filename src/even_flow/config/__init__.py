@@ -1,7 +1,7 @@
 from .VariationalAutoencoderConfig import VariationalAutoencoderConfig, ConvolutionalVariationalAutoencoderConfig
 from .ConvLayerConfig import DownsampleConvLayerConfig, ConvLayerConfig, UpsampleConvLayerConfig
 from .ResNetLayerConfig import ResNetLayerConfig
-from .ActivationLayerConfig import ActivationLayerConfig
+from .ActivationLayerConfig import ActivationLayerConfig, ChannelwiseActivationLayerConfig
 from .AttentionLayerConfig import PatchAttentionLayerConfig
 from .ProbabilisticLayerConfig import ProbabilisticLayerConfig
 from .UNetConfig import UNetConfig
@@ -14,6 +14,7 @@ __all__ = ["VariationalAutoencoderConfig",
            "ConvLayerConfig", 
            "ResNetLayerConfig", 
            "ActivationLayerConfig", 
+           "ChannelwiseActivationLayerConfig",
            "PatchAttentionLayerConfig", 
            "UpsampleConvLayerConfig", 
            "ProbabilisticLayerConfig", 
